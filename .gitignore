@@ -35,3 +35,8 @@ htmlcov/
 extraction/storage/extracted_json/*.json
 !extraction/storage/extracted_json/.gitkeep
 
+# Generated runtime artifacts
+generation/storage/generated_content/*.json
+!generation/storage/generated_content/.gitkeep
+
+

@@ -1,7 +1,6 @@
 import re
 from typing import Dict, Any, List, Optional
 from generation.graph.state import GenerationState
-from generation.services.ollama_client import OllamaClient
 
 def prepare_context_node(state: GenerationState) -> Dict[str, Any]:
     """
@@ -34,13 +33,17 @@ def prepare_context_node(state: GenerationState) -> Dict[str, Any]:
 
 def governed_generate_node(
     state: GenerationState,
-    ollama_client: Optional[OllamaClient] = None
+    ollama_client: Optional[Any] = None
 ) -> Dict[str, Any]:
     """
     Prompts Ollama qwen3:8b under strict governance instructions, requiring every
     factual assertion to cite source pointer tags like [doc_xxx#p_0].
     """
-    client = ollama_client or OllamaClient()
+    if ollama_client is None:
+        from generation.services.ollama_client import OllamaClient
+        client = OllamaClient()
+    else:
+        client = ollama_client
     instruction = state.get("instruction", "Summarize and structure the document.")
     guidelines = state.get("guidelines", [])
     context = state.get("context_blocks", "")

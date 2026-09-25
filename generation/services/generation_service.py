@@ -8,7 +8,6 @@ from generation.models.generation_models import (
     GenerationMetadata,
     ClaimItem,
 )
-from generation.graph.workflow import create_generation_workflow
 from generation.graph.state import GenerationState
 from generation.services.storage_service import GenerationStorageService
 
@@ -28,7 +27,11 @@ class GenerationService:
         storage_dir: Optional[Path] = None,
         extraction_storage_dir: Optional[Path] = None
     ):
-        self.workflow = workflow or create_generation_workflow()
+        if workflow is None:
+            from generation.graph.workflow import create_generation_workflow
+            self.workflow = create_generation_workflow()
+        else:
+            self.workflow = workflow
         self.storage = GenerationStorageService(storage_dir=storage_dir)
         self.extraction_storage_dir = Path(extraction_storage_dir) if extraction_storage_dir else DEFAULT_EXTRACTION_STORAGE_DIR
 
