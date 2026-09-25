@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { Shield, Activity, Layers, Terminal, Sparkles, ExternalLink } from "lucide-react";
+import { Shield, Layers, Sparkles, Terminal, ExternalLink, Activity } from "lucide-react";
 import { checkHealth } from "../services/api";
 
 export default function Navbar({ activeTab, setActiveTab }) {
@@ -28,156 +28,150 @@ export default function Navbar({ activeTab, setActiveTab }) {
       position: "sticky",
       top: 0,
       zIndex: 50,
-      background: "rgba(8, 12, 20, 0.85)",
+      background: "rgba(5, 8, 22, 0.85)",
       backdropFilter: "blur(16px)",
+      WebkitBackdropFilter: "blur(16px)",
       borderBottom: "1px solid var(--border-subtle)",
-      padding: "14px 28px",
+      padding: "14px 32px",
     }}>
       <div style={{
-        maxWidth: "1400px",
+        maxWidth: "1680px",
         margin: "0 auto",
         display: "flex",
         alignItems: "center",
         justifyContent: "space-between",
-        gap: "20px",
+        gap: "24px",
       }}>
-        {/* Brand */}
+        {/* Brand / Logo Area */}
         <div 
           onClick={() => setActiveTab("landing")}
-          style={{ display: "flex", alignItems: "center", gap: "12px", cursor: "pointer" }}
+          style={{ 
+            display: "flex", 
+            alignItems: "center", 
+            gap: "14px", 
+            cursor: "pointer",
+            userSelect: "none",
+          }}
         >
           <div style={{
-            width: "38px",
-            height: "38px",
-            borderRadius: "10px",
-            background: "linear-gradient(135deg, #0ea5e9, #6366f1)",
+            width: "40px",
+            height: "40px",
+            borderRadius: "12px",
+            background: "linear-gradient(135deg, rgba(2, 132, 199, 0.85), rgba(37, 99, 235, 0.85))",
+            border: "1px solid rgba(56, 189, 248, 0.3)",
             display: "flex",
             alignItems: "center",
             justifyContent: "center",
-            boxShadow: "0 0 15px rgba(56, 189, 248, 0.4)",
+            boxShadow: "0 2px 10px rgba(2, 132, 199, 0.25)",
+            transition: "all var(--transition-fast)",
           }}>
-            <Shield size={20} color="#ffffff" />
+            <Shield size={22} color="#ffffff" strokeWidth={2.2} />
           </div>
           <div>
             <div style={{
-              fontFamily: "var(--font-heading)",
-              fontSize: "1.2rem",
-              fontWeight: 800,
-              letterSpacing: "-0.03em",
-              background: "linear-gradient(90deg, #f8fafc 0%, #38bdf8 100%)",
-              WebkitBackgroundClip: "text",
-              WebkitTextFillColor: "transparent",
+              display: "flex",
+              alignItems: "center",
+              gap: "8px",
             }}>
-              VERITAS
+              <span style={{
+                fontFamily: "var(--font-heading)",
+                fontSize: "17px",
+                fontWeight: 700,
+                letterSpacing: "-0.02em",
+                color: "#f8fafc",
+              }}>
+                VERITAS
+              </span>
+              <span style={{
+                fontSize: "11px",
+                fontWeight: 600,
+                padding: "2px 7px",
+                borderRadius: "4px",
+                background: "rgba(255, 255, 255, 0.05)",
+                border: "1px solid var(--border-subtle)",
+                color: "var(--text-muted)",
+                letterSpacing: "0.04em",
+              }}>
+                STUDIO
+              </span>
             </div>
-            <div style={{ fontSize: "0.68rem", color: "var(--text-dim)", textTransform: "uppercase", letterSpacing: "0.08em" }}>
-              Governed Transformation
+            <div style={{ 
+              fontSize: "12px", 
+              color: "var(--text-dim)", 
+              letterSpacing: "0.01em",
+              marginTop: "1px",
+            }}>
+              Governed Transformation Engine
             </div>
           </div>
         </div>
 
-        {/* View Switcher Tabs */}
-        <nav style={{
-          display: "flex",
-          alignItems: "center",
-          gap: "6px",
-          background: "rgba(15, 23, 42, 0.8)",
-          padding: "4px",
-          borderRadius: "12px",
-          border: "1px solid var(--border-subtle)",
-        }}>
+        {/* View Switcher: Segmented Control (Linear/Arc style) */}
+        <nav className="segmented-control" style={{ maxWidth: "360px", width: "100%" }}>
           <button
             onClick={() => setActiveTab("landing")}
-            style={{
-              display: "flex",
-              alignItems: "center",
-              gap: "8px",
-              padding: "8px 16px",
-              borderRadius: "8px",
-              border: "none",
-              background: activeTab === "landing" ? "linear-gradient(135deg, #1e293b, #0f172a)" : "transparent",
-              color: activeTab === "landing" ? "var(--accent-cyan)" : "var(--text-muted)",
-              boxShadow: activeTab === "landing" ? "0 2px 8px rgba(0,0,0,0.4), inset 0 0 1px 1px rgba(255,255,255,0.05)" : "none",
-              fontFamily: "var(--font-heading)",
-              fontSize: "0.85rem",
-              fontWeight: 600,
-              cursor: "pointer",
-              transition: "all 0.2s ease",
-            }}
+            className={`segmented-control-btn ${activeTab === "landing" ? "active" : ""}`}
+            style={{ padding: "8px 16px", fontSize: "13px" }}
           >
-            <Layers size={16} />
+            <Layers size={15} />
             Architecture Overview
           </button>
 
           <button
             onClick={() => setActiveTab("studio")}
-            style={{
-              display: "flex",
-              alignItems: "center",
-              gap: "8px",
-              padding: "8px 18px",
-              borderRadius: "8px",
-              border: "none",
-              background: activeTab === "studio" ? "linear-gradient(135deg, #0284c7, #2563eb)" : "transparent",
-              color: activeTab === "studio" ? "#ffffff" : "var(--text-muted)",
-              boxShadow: activeTab === "studio" ? "0 4px 14px rgba(14, 165, 233, 0.4)" : "none",
-              fontFamily: "var(--font-heading)",
-              fontSize: "0.85rem",
-              fontWeight: 600,
-              cursor: "pointer",
-              transition: "all 0.2s ease",
-            }}
+            className={`segmented-control-btn ${activeTab === "studio" ? "active" : ""}`}
+            style={{ padding: "8px 16px", fontSize: "13px" }}
           >
-            <Sparkles size={16} />
+            <Sparkles size={15} />
             Studio Workspace
           </button>
         </nav>
 
-        {/* Backend Status Pill & Docs Link */}
-        <div style={{ display: "flex", alignItems: "center", gap: "14px" }}>
+        {/* Gateway Status Pill & API Docs Ghost Button */}
+        <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+          {/* Status Pill */}
           <div style={{
-            display: "flex",
+            display: "inline-flex",
             alignItems: "center",
-            gap: "8px",
+            gap: "7px",
             padding: "5px 12px",
-            borderRadius: "20px",
-            background: isOnline ? "rgba(16, 185, 129, 0.12)" : "rgba(239, 68, 68, 0.12)",
-            border: `1px solid ${isOnline ? "rgba(16, 185, 129, 0.3)" : "rgba(239, 68, 68, 0.3)"}`,
-            fontSize: "0.78rem",
+            borderRadius: "var(--radius-pill)",
+            background: isOnline ? "rgba(16, 185, 129, 0.08)" : "rgba(239, 68, 68, 0.08)",
+            border: `1px solid ${isOnline ? "rgba(16, 185, 129, 0.25)" : "rgba(239, 68, 68, 0.25)"}`,
+            fontSize: "12px",
             color: isOnline ? "#34d399" : "#f87171",
             fontFamily: "var(--font-mono)",
+            fontWeight: 500,
           }}>
             <span style={{
-              width: "7px",
-              height: "7px",
+              width: "6px",
+              height: "6px",
               borderRadius: "50%",
               background: isOnline ? "#10b981" : "#ef4444",
-              boxShadow: isOnline ? "0 0 8px #10b981" : "none",
+              boxShadow: isOnline ? "0 0 8px rgba(16, 185, 129, 0.6)" : "none",
               display: "inline-block",
             }} />
             {isOnline ? "Gateway :8000 Active" : "Backend Offline"}
           </div>
 
+          {/* API Docs Ghost Button */}
           <a
             href="http://localhost:8000/docs"
             target="_blank"
             rel="noreferrer"
+            className="btn btn-ghost btn-sm"
             style={{
-              display: "flex",
-              alignItems: "center",
-              gap: "5px",
-              fontSize: "0.8rem",
-              color: "var(--text-dim)",
-              padding: "6px 10px",
-              borderRadius: "6px",
-              background: "rgba(255,255,255,0.03)",
-              transition: "color 0.2s ease",
+              gap: "6px",
+              fontSize: "13px",
+              padding: "0 12px",
+              color: "var(--text-muted)",
+              height: "32px",
             }}
-            title="Open Swagger OpenAPI Documentation"
+            title="Open Interactive API Docs (Swagger OpenAPI)"
           >
             <Terminal size={14} />
             API Docs
-            <ExternalLink size={12} />
+            <ExternalLink size={12} style={{ opacity: 0.6 }} />
           </a>
         </div>
       </div>

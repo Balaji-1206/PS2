@@ -12,9 +12,11 @@ class ChannelType(str, Enum):
     EXECUTIVE_SUMMARY = "executive_summary"
     LINKEDIN_POST = "linkedin_post"
     TWITTER_POST = "twitter_post"
+    TWITTER_THREAD = "twitter_thread"
     ADVISORY = "advisory"
     INFOGRAPHIC_BRIEF = "infographic_brief"
     PRESENTATION_OUTLINE = "presentation_outline"
+    VIDEO_PACKAGE = "video_package"
 
 
 class OperatorConfig(BaseModel):

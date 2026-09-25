@@ -49,6 +49,10 @@ CHANNEL_TEMPLATES: Dict[ChannelType, str] = {
         "Draft a punchy, concise post for X/Twitter under 280 characters, "
         "highlighting the headline fact with source pointer citation."
     ),
+    ChannelType.TWITTER_THREAD: (
+        "Draft a punchy, structured thread for X/Twitter with sequential numbered points, "
+        "highlighting key findings and source pointer citations."
+    ),
     ChannelType.ADVISORY: (
         "Draft a formal operational advisory notice outlining urgent directives, "
         "compliance rules, and recommended actions."
@@ -60,6 +64,10 @@ CHANNEL_TEMPLATES: Dict[ChannelType, str] = {
     ChannelType.PRESENTATION_OUTLINE: (
         "Draft a structured slide presentation outline detailing Slide Titles, "
         "Key Bullet Points, and Speaker Notes."
+    ),
+    ChannelType.VIDEO_PACKAGE: (
+        "Draft a complete video package including script, storyboard, scene descriptions, "
+        "narration text, subtitles, and visual recommendations."
     ),
 }
 
