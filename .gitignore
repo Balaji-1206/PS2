@@ -47,5 +47,6 @@ dual_verification/storage/verifications/*.json
 provenance/storage/records/*.json
 !provenance/storage/records/.gitkeep
 
-
-
+# Claim banks runtime artifacts
+extraction/storage/claim_banks/*.json
+!extraction/storage/claim_banks/.gitkeep

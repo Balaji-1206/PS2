@@ -1,11 +1,14 @@
 from typing import Optional
 from fastapi import APIRouter, UploadFile, File, Form, HTTPException, status
 from extraction.api.schemas import ExtractionAPIResponse, ErrorResponse
+from extraction.models.claim_models import ClaimBank
 from extraction.models.extraction_models import ExtractionResult
 from extraction.services.extraction_service import ExtractionService
+from extraction.services.claim_service import SourceClaimService
 
 router = APIRouter()
 extraction_service = ExtractionService()
+claim_service = SourceClaimService()
 
 @router.post(
     "/extract",
@@ -77,3 +80,25 @@ async def get_extraction(document_id: str):
             detail=f"Document {document_id} not found."
         )
     return result
+
+
+@router.get(
+    "/extract/{document_id}/claims",
+    response_model=ClaimBank,
+    responses={404: {"model": ErrorResponse}}
+)
+async def get_or_extract_claims(document_id: str):
+    """
+    Retrieves or generates the Atomic Source Claim Bank for an extracted document.
+    """
+    claim_bank = claim_service.get_claim_bank(document_id)
+    if not claim_bank:
+        doc = extraction_service.storage.get(document_id)
+        if not doc:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Document {document_id} not found."
+            )
+        claim_bank = claim_service.extract_claim_bank(doc)
+    return claim_bank
+
