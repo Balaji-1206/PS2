@@ -39,4 +39,13 @@ extraction/storage/extracted_json/*.json
 generation/storage/generated_content/*.json
 !generation/storage/generated_content/.gitkeep
 
+# Dual verification runtime artifacts
+dual_verification/storage/verifications/*.json
+!dual_verification/storage/verifications/.gitkeep
+
+# Provenance runtime artifacts
+provenance/storage/records/*.json
+!provenance/storage/records/.gitkeep
+
+
 
