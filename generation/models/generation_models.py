@@ -25,6 +25,7 @@ class GenerationRequest(BaseModel):
     extraction_data: Optional[Dict[str, Any]] = None
     instruction: str
     guidelines: List[str] = Field(default_factory=list)
+    allow_free_prompt: bool = False
 
 class GenerationResponse(BaseModel):
     status: str = "success"
