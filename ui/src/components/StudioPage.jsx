@@ -102,11 +102,9 @@ const STEPS = [
 export default function StudioPage({ 
   onOpenTraceModal, 
   onNavigateToAccount, 
-  onNavigateToOverview, 
-  loadedDocument 
+  loadedDocument,
+  onDocumentIdChange 
 }) {
-  // --- View Mode: Sequential Guided Pipeline vs All-in-One Grid ---
-  const [viewMode, setViewMode] = useState("sequential"); // "sequential" | "grid"
   const [currentStep, setCurrentStep] = useState(1); // 1 to 5
 
   // --- Gateway Health State ---
@@ -207,6 +205,7 @@ export default function StudioPage({
 
       if (res && res.document_id) {
         setDocumentId(res.document_id);
+        if (onDocumentIdChange) onDocumentIdChange(res.document_id);
         const bank = await getClaimBank(res.document_id);
         setClaimBank(bank);
         
@@ -239,9 +238,7 @@ export default function StudioPage({
         }
 
         // Advance to Stage 2 automatically in sequential mode
-        if (viewMode === "sequential") {
-          setTimeout(() => setCurrentStep(2), 500);
-        }
+        setTimeout(() => setCurrentStep(2), 500);
       }
     } catch (err) {
       alert(`Extraction Error: ${err.message}`);
@@ -528,148 +525,11 @@ export default function StudioPage({
       flexDirection: "column",
       gap: "24px",
     }}>
-      {/* ========================================================= */}
-      {/* Studio Header Bar & Unified Navigation                    */}
-      {/* ========================================================= */}
-      <div style={{
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "space-between",
-        flexWrap: "wrap",
-        gap: "16px",
-        paddingBottom: "20px",
-        borderBottom: "1px solid rgba(245, 158, 11, 0.20)",
-      }}>
-        {/* Brand Area */}
-        <div style={{ display: "flex", alignItems: "center", gap: "16px" }}>
-          <div style={{
-            width: "44px",
-            height: "44px",
-            borderRadius: "12px",
-            background: "linear-gradient(135deg, #ea580c 0%, #f59e0b 100%)",
-            border: "1px solid rgba(255, 255, 255, 0.4)",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            boxShadow: "0 3px 14px rgba(234, 88, 12, 0.28)",
-            flexShrink: 0,
-          }}>
-            <Shield size={24} color="#ffffff" strokeWidth={2.4} />
-          </div>
-
-          <div>
-            <div style={{ display: "flex", alignItems: "center", gap: "10px", flexWrap: "wrap" }}>
-              <h1 className="text-page-title" style={{ fontSize: "24px", color: "#0f172a" }}>
-                Governed Transformation Studio
-              </h1>
-              <span className="badge-pill badge-confidential" style={{ fontSize: "11px", fontWeight: 700 }}>
-                ENTERPRISE ACTIVE
-              </span>
-            </div>
-            <div style={{ fontSize: "13px", color: "#64748b", marginTop: "2px" }}>
-              Sequential Process Pipeline • Grounded Assertions • Cryptographic Verification
-            </div>
-          </div>
-        </div>
-
-        {/* Studio Mode Controls & Nav Switcher */}
-        <div style={{ display: "flex", alignItems: "center", gap: "12px", flexWrap: "wrap" }}>
-          {/* Mode Switcher: Guided Flow vs All-in-One Grid */}
-          <div className="segmented-control" style={{ maxWidth: "260px" }}>
-            <button
-              onClick={() => setViewMode("sequential")}
-              className={`segmented-control-btn ${viewMode === "sequential" ? "active" : ""}`}
-              style={{ fontSize: "12px", padding: "6px 12px" }}
-            >
-              <Zap size={13} />
-              Sequential Flow
-            </button>
-
-            <button
-              onClick={() => setViewMode("grid")}
-              className={`segmented-control-btn ${viewMode === "grid" ? "active" : ""}`}
-              style={{ fontSize: "12px", padding: "6px 12px" }}
-            >
-              <LayoutGrid size={13} />
-              All-in-One Grid
-            </button>
-          </div>
-
-          {/* Account Studio Button */}
-          {onNavigateToAccount && (
-            <button
-              onClick={onNavigateToAccount}
-              className="btn btn-secondary btn-sm"
-              style={{ gap: "6px", height: "36px", color: "#78350f" }}
-              title="Open User Account & Data Storage Studio"
-            >
-              <User size={14} color="#ea580c" />
-              Account Studio
-            </button>
-          )}
-
-          {/* Overview Button */}
-          {onNavigateToOverview && (
-            <button
-              onClick={onNavigateToOverview}
-              className="btn btn-ghost btn-sm"
-              style={{ gap: "6px", height: "36px", color: "#64748b" }}
-            >
-              <Layers size={14} color="#ea580c" />
-              Overview
-            </button>
-          )}
-
-          {/* Compact Gateway Status Pill */}
-          <div style={{
-            display: "inline-flex",
-            alignItems: "center",
-            gap: "7px",
-            padding: "6px 14px",
-            borderRadius: "var(--radius-pill)",
-            background: isGatewayOnline ? "#ecfdf5" : "#fef2f2",
-            border: `1px solid ${isGatewayOnline ? "#a7f3d0" : "#fecaca"}`,
-            fontSize: "12px",
-            fontWeight: 600,
-          }}>
-            <span style={{
-              width: "7px",
-              height: "7px",
-              borderRadius: "50%",
-              backgroundColor: isGatewayOnline ? "#10b981" : "#ef4444",
-              boxShadow: `0 0 6px ${isGatewayOnline ? "#10b981" : "#ef4444"}`,
-              display: "inline-block",
-            }} />
-            <span style={{ color: isGatewayOnline ? "#047857" : "#dc2626" }}>
-              {isGatewayOnline ? "Gateway Active" : "Gateway Offline"}
-            </span>
-          </div>
-
-          {/* API Docs Button */}
-          <a
-            href="http://localhost:8000/docs"
-            target="_blank"
-            rel="noreferrer"
-            className="btn btn-ghost btn-sm"
-            style={{
-              gap: "6px",
-              height: "36px",
-              fontSize: "12px",
-              color: "#78350f",
-            }}
-          >
-            <BookOpen size={14} color="#ea580c" />
-            Docs
-            <ExternalLink size={12} color="#94a3b8" />
-          </a>
-        </div>
-      </div>
 
       {/* ========================================================= */}
       {/* SEQUENTIAL PROCESS STEPPER TRACKER (Dynamic Glow Flow)    */}
       {/* ========================================================= */}
-      {viewMode === "sequential" && (
-        <div className="studio-card" style={{ padding: "20px 24px", background: "#ffffff" }}>
+      <div className="studio-card" style={{ padding: "20px 24px", background: "#ffffff" }}>
           <div className="pipeline-stepper">
             {/* Progress Connecting Line */}
             <div 
@@ -737,12 +597,8 @@ export default function StudioPage({
             )}
           </div>
         </div>
-      )}
 
-      {/* ========================================================= */}
-      {/* VIEW MODE 1: SEQUENTIAL GUIDED PROCESS STAGES             */}
-      {/* ========================================================= */}
-      {viewMode === "sequential" && (
+        {/* SEQUENTIAL GUIDED PROCESS STAGES */}
         <div>
           {/* STAGE 1: INPUT GETTING (Source Ingestion & Extraction) */}
           {currentStep === 1 && (
@@ -1646,170 +1502,6 @@ export default function StudioPage({
             </div>
           )}
         </div>
-      )}
-
-      {/* ========================================================= */}
-      {/* VIEW MODE 2: CLASSIC ALL-IN-ONE 3-COLUMN STUDIO GRID      */}
-      {/* ========================================================= */}
-      {viewMode === "grid" && (
-        <div className="studio-grid">
-          {/* COLUMN 1: Source Ingestion & Governance */}
-          <div className="studio-col-left" style={{ display: "flex", flexDirection: "column", gap: "24px" }}>
-            <div className="studio-card">
-              <div className="studio-card-header">
-                <div className="studio-card-title-group">
-                  <div className="studio-card-icon">
-                    <FileText size={18} color="#ea580c" />
-                  </div>
-                  <div>
-                    <h3 className="text-card-title">Source Ingestion</h3>
-                    <div className="text-meta">Multi-modality ingest</div>
-                  </div>
-                </div>
-              </div>
-
-              <textarea
-                rows={7}
-                value={sourceText}
-                onChange={(e) => setSourceText(e.target.value)}
-                placeholder="Paste corporate report..."
-                style={{ fontSize: "13px", lineHeight: 1.5, marginBottom: "14px" }}
-              />
-
-              <button
-                onClick={handleExtract}
-                disabled={isExtracting}
-                className="btn btn-primary"
-                style={{ width: "100%", height: "40px" }}
-              >
-                {isExtracting ? "Extracting..." : "Ingest & Extract Claims"}
-              </button>
-            </div>
-
-            <div className="studio-card">
-              <div className="studio-card-header">
-                <div className="studio-card-title-group">
-                  <div className="studio-card-icon" style={{ background: "#fffbeb" }}>
-                    <Sliders size={18} color="#d97706" />
-                  </div>
-                  <div>
-                    <h3 className="text-card-title">Operator Governance</h3>
-                    <div className="text-meta">Policy constraints</div>
-                  </div>
-                </div>
-              </div>
-
-              <div style={{ display: "flex", flexDirection: "column", gap: "14px" }}>
-                <div>
-                  <label className="text-label" style={{ display: "block", marginBottom: "4px" }}>Domain Profile</label>
-                  <select value={domainProfile} onChange={(e) => setDomainProfile(e.target.value)}>
-                    <option value="corporate">Corporate Strategy</option>
-                    <option value="healthcare">Healthcare</option>
-                    <option value="government">Government</option>
-                    <option value="cybersecurity">Cyber Threat Intel</option>
-                  </select>
-                </div>
-
-                <div>
-                  <label className="text-label" style={{ display: "block", marginBottom: "4px" }}>Disclosure Ceiling</label>
-                  <select value={disclosureLevel} onChange={(e) => setDisclosureLevel(e.target.value)}>
-                    <option value="PUBLIC">PUBLIC</option>
-                    <option value="INTERNAL">INTERNAL</option>
-                    <option value="CONFIDENTIAL">CONFIDENTIAL</option>
-                    <option value="RESTRICTED">RESTRICTED</option>
-                  </select>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* COLUMN 2: Claim Bank & Collateral Workspace */}
-          <div className="studio-col-center" style={{ display: "flex", flexDirection: "column", gap: "24px" }}>
-            <div className="studio-card">
-              <div className="studio-card-header">
-                <div>
-                  <h3 className="text-card-title">Pre-Generation Claim Bank</h3>
-                  <div className="text-meta">Atomic grounded assertions</div>
-                </div>
-                <span className="text-meta">Permitted: {selectedClaimIds.length}</span>
-              </div>
-
-              <div style={{ display: "flex", flexDirection: "column", gap: "8px", maxHeight: "300px", overflowY: "auto" }}>
-                {claimBank?.claims?.map((claim) => (
-                  <div key={claim.claim_id} className="claim-row" style={{ padding: "12px" }}>
-                    <div style={{ flex: 1 }}>
-                      <div style={{ display: "flex", gap: "6px", marginBottom: "4px" }}>
-                        <span className="badge-pill badge-confidential">{claim.sensitivity_label}</span>
-                        <span className="font-mono text-meta">{claim.source_pointer}</span>
-                      </div>
-                      <div style={{ fontSize: "13px" }}>{claim.statement}</div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            <div className="studio-card">
-              <div className="studio-card-header">
-                <div>
-                  <h3 className="text-card-title">Multi-Channel Rendering Workspace</h3>
-                  <div className="text-meta">Synthesize parallel governed collateral</div>
-                </div>
-                <button onClick={handleGenerateChannels} disabled={isGenerating} className="btn btn-primary btn-sm">
-                  {isGenerating ? "Rendering..." : "Render Channels"}
-                </button>
-              </div>
-
-              <div className="channel-grid">
-                {CHANNEL_DEFINITIONS.slice(0, 3).map((ch) => (
-                  <div key={ch.id} className={`channel-card ${selectedChannels.includes(ch.id) ? "selected" : ""}`}>
-                    <div style={{ fontWeight: 700, fontSize: "13px" }}>{ch.title}</div>
-                    <div className="text-meta">{ch.desc}</div>
-                  </div>
-                ))}
-              </div>
-
-              {channelOutputs && channelOutputs[activeChannelTab] && (
-                <div style={{ padding: "16px", background: "#ffffff", borderRadius: "10px", border: "1px solid rgba(245, 158, 11, 0.25)" }}>
-                  <div style={{ whiteSpace: "pre-wrap", fontSize: "14px", lineHeight: 1.6 }}>
-                    {renderTextWithCitations(channelOutputs[activeChannelTab]?.generated_text)}
-                  </div>
-                </div>
-              )}
-            </div>
-          </div>
-
-          {/* COLUMN 3: Verification & Audit */}
-          <div className="studio-col-right" style={{ display: "flex", flexDirection: "column", gap: "24px" }}>
-            <div className="studio-card">
-              <div className="studio-card-header">
-                <div>
-                  <h3 className="text-card-title">Dual Verification</h3>
-                  <div className="text-meta">Fidelity entailment</div>
-                </div>
-                <button onClick={handleVerify} className="btn btn-secondary btn-sm">Verify</button>
-              </div>
-              <div className="text-meta">Gate 1 & Gate 2 active security clearance.</div>
-            </div>
-
-            <div className="studio-card">
-              <div className="studio-card-header">
-                <div>
-                  <h3 className="text-card-title">Audit Manifest</h3>
-                  <div className="text-meta">Tamper seal</div>
-                </div>
-                <button onClick={handlePublish} className="btn btn-primary btn-sm">Sign</button>
-              </div>
-              {integrityStatus && (
-                <div className="font-mono text-meta" style={{ wordBreak: "break-all", color: "#c2410c" }}>
-                  {integrityStatus.hash}
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
-      )}
-
-    </div>
+      </div>
   );
 }
