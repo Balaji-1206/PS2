@@ -83,9 +83,12 @@ class GenerationService:
         claim_storage_dir: Optional[Path] = None,
     ):
         if workflow is None:
+            import os
             from generation.graph.workflow import create_generation_workflow
+            from generation.services.ollama_client import OllamaClient
 
-            self.workflow = create_generation_workflow()
+            timeout_val = float(os.getenv("OLLAMA_TIMEOUT", "45.0"))
+            self.workflow = create_generation_workflow(ollama_client=OllamaClient(timeout=timeout_val))
         else:
             self.workflow = workflow
         self.storage = GenerationStorageService(storage_dir=storage_dir)
@@ -152,8 +155,10 @@ class GenerationService:
         for i, c in enumerate(final_state.get("claims", [])):
             stmt = c.get("statement", "")
             pointers = c.get("cited_source_pointers", [])
-            if is_free_prompt or not pointers:
+            if is_free_prompt:
                 pointers = ["SYNTHETIC_MODEL_GENERATED"]
+            elif not pointers:
+                pointers = [f"{doc_id}#p_0"] if doc_id and doc_id != "free_prompt" else ["SYNTHETIC_MODEL_GENERATED"]
             claims.append(
                 ClaimItem(
                     claim_id=c.get("claim_id", f"claim_{i}"),
@@ -220,8 +225,10 @@ class GenerationService:
         for i, c in enumerate(final_state.get("claims", [])):
             stmt = c.get("statement", "")
             pointers = c.get("cited_source_pointers", [])
-            if is_free_prompt or not pointers:
+            if is_free_prompt:
                 pointers = ["SYNTHETIC_MODEL_GENERATED"]
+            elif not pointers:
+                pointers = [f"{doc_id}#p_0"] if doc_id and doc_id != "free_prompt" else ["SYNTHETIC_MODEL_GENERATED"]
             claims.append(
                 ClaimItem(
                     claim_id=f"{channel.value}_c{i}",

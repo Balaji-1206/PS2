@@ -7,7 +7,7 @@ import AccountStudio from "./components/AccountStudio";
 import ReverseTraceModal from "./components/ReverseTraceModal";
 
 export default function App() {
-  const [activeTab, setActiveTab] = useState("studio"); // "studio" | "account" | "landing"
+  const [activeTab, setActiveTab] = useState("landing"); // "landing" | "studio" | "account"
   const [tracePointer, setTracePointer] = useState(null);
   const [loadedDocument, setLoadedDocument] = useState(null);
   const [activeDocumentId, setActiveDocumentId] = useState(null);

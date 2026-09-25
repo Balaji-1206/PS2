@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
-import { 
-  Shield, Zap, User, Layers, BookOpen, ExternalLink, 
+import {
+  Shield, Zap, User, Layers, BookOpen, ExternalLink,
   Activity, CheckCircle2, ChevronRight, FileText, Database,
   Sliders, ShieldCheck, Lock
 } from "lucide-react";
@@ -50,7 +50,7 @@ export default function Sidebar({ activeTab, setActiveTab }) {
       {/* Top: Logo & Main Navigation */}
       <div>
         {/* Top Brand Emblem Button - Architecture Overview Trigger */}
-        <div 
+        <div
           onClick={() => setActiveTab("landing")}
           role="button"
           tabIndex={0}
@@ -119,14 +119,14 @@ export default function Sidebar({ activeTab, setActiveTab }) {
                 STUDIO
               </span>
             </div>
-            <div style={{ 
-              fontSize: "11px", 
-              color: "#c2410c", 
+            <div style={{
+              fontSize: "11px",
+              color: "#c2410c",
               fontWeight: 600,
-              display: "flex", 
-              alignItems: "center", 
+              display: "flex",
+              alignItems: "center",
               gap: "4px",
-              marginTop: "2px" 
+              marginTop: "2px"
             }}>
               <Layers size={11} color="#ea580c" />
               Architecture Overview
@@ -303,7 +303,7 @@ export default function Sidebar({ activeTab, setActiveTab }) {
         </div>
 
         {/* User Profile Card & Account Studio Access */}
-        <div 
+        <div
           onClick={() => setActiveTab("account")}
           role="button"
           tabIndex={0}
@@ -313,16 +313,16 @@ export default function Sidebar({ activeTab, setActiveTab }) {
             gap: "10px",
             padding: "11px 12px",
             borderRadius: "12px",
-            background: activeTab === "account" 
-              ? "linear-gradient(135deg, #fff7ed 0%, #fffbf5 100%)" 
+            background: activeTab === "account"
+              ? "linear-gradient(135deg, #fff7ed 0%, #fffbf5 100%)"
               : "#fffdfa",
-            border: activeTab === "account" 
-              ? "1.5px solid #ea580c" 
+            border: activeTab === "account"
+              ? "1.5px solid #ea580c"
               : "1px solid rgba(245, 158, 11, 0.25)",
             cursor: "pointer",
             transition: "all var(--transition-fast)",
-            boxShadow: activeTab === "account" 
-              ? "0 3px 12px rgba(234, 88, 12, 0.12)" 
+            boxShadow: activeTab === "account"
+              ? "0 3px 12px rgba(234, 88, 12, 0.12)"
               : "none",
           }}
           onMouseEnter={(e) => {
@@ -373,14 +373,14 @@ export default function Sidebar({ activeTab, setActiveTab }) {
                 {profile.clearanceLevel}
               </span>
             </div>
-            <div style={{ 
-              display: "flex", 
-              alignItems: "center", 
-              gap: "4px", 
-              fontSize: "11px", 
-              color: activeTab === "account" ? "#c2410c" : "#b45309", 
-              fontWeight: 600, 
-              marginTop: "2px" 
+            <div style={{
+              display: "flex",
+              alignItems: "center",
+              gap: "4px",
+              fontSize: "11px",
+              color: activeTab === "account" ? "#c2410c" : "#b45309",
+              fontWeight: 600,
+              marginTop: "2px"
             }}>
               <Database size={11} color={activeTab === "account" ? "#ea580c" : "#d97706"} />
               <span>Account & Data Studio</span>

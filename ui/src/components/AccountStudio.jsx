@@ -35,7 +35,13 @@ export default function AccountStudio({
   };
 
   const handleCopy = (text, id) => {
-    navigator.clipboard.writeText(text);
+    if (!text) return;
+    const cleanText = text
+      .replace(/\s*\[[a-zA-Z0-9_\-#]+\]/g, "")
+      .replace(/\s+([.,;:!?])/g, "$1")
+      .replace(/[ \t]{2,}/g, " ")
+      .trim();
+    navigator.clipboard.writeText(cleanText);
     setCopiedId(id);
     setTimeout(() => setCopiedId(null), 2000);
   };

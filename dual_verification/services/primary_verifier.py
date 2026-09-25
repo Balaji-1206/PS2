@@ -10,7 +10,9 @@ class PrimaryVerifier:
     contradicts, or fails to support a given claim statement.
     """
     def __init__(self, ollama_client: Optional[OllamaClient] = None):
-        self.ollama = ollama_client or OllamaClient()
+        import os
+        verify_timeout = float(os.getenv("OLLAMA_VERIFY_TIMEOUT", "12.0"))
+        self.ollama = ollama_client or OllamaClient(timeout=verify_timeout)
 
     def verify_claim(
         self,
@@ -19,6 +21,7 @@ class PrimaryVerifier:
     ) -> Tuple[VerificationVerdict, float, str]:
         if not source_evidence.strip():
             return VerificationVerdict.UNSUPPORTED, 0.0, "No source evidence found for cited pointers."
+
 
         system_prompt = (
             "You are a rigorous Natural Language Inference (NLI) Fact-Checking Engine.\n"

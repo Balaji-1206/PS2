@@ -100,6 +100,11 @@ def decompose_claims_node(state: GenerationState) -> Dict[str, Any]:
         # Clean bracket citations from the claim statement text
         statement = re.sub(r"\s*\[[a-zA-Z0-9_]+#(?:p_\d+|table_\d+|block_\d+)\]", "", clean_sent).strip()
 
+        # Skip headers or isolated punctuation
+        clean_text_check = re.sub(r"[#*_.\-:]", "", statement).strip()
+        if len(clean_text_check) < 8:
+            continue
+
         claims.append({
             "claim_id": f"claim_{claim_idx}",
             "statement": statement,

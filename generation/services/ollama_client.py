@@ -20,7 +20,7 @@ class OllamaClient:
         self.timeout = float(os.getenv("OLLAMA_TIMEOUT", str(timeout)))
 
     def generate(self, prompt: str, system: Optional[str] = None) -> str:
-        options = {"temperature": 0.2}
+        options = {"temperature": 0.2, "num_ctx": 4096}
         try:
             client = ollama.Client(host=self.host, timeout=self.timeout)
             response = client.generate(
@@ -83,7 +83,7 @@ class OllamaClient:
 
         lower_prompt = prompt.lower()
         if "linkedin" in lower_prompt:
-            bullets = [f"• {text.strip()} [{ptr}]" for ptr, text in pointers_and_texts[:4]]
+            bullets = [f"• {text.strip().rstrip('.!?,; ')} [{ptr}]" for ptr, text in pointers_and_texts[:4]]
             return (
                 "🚀 Key Strategic Milestones & Operational Achievements\n\n"
                 "Excited to share our latest verified organizational progress:\n\n"
@@ -93,12 +93,12 @@ class OllamaClient:
             )
         elif "twitter" in lower_prompt or "x/" in lower_prompt or "thread" in lower_prompt:
             thread_items = [
-                f"{i+1}/{len(pointers_and_texts[:4])} ⚡ {text.strip()} [{ptr}]"
+                f"{i+1}/{len(pointers_and_texts[:4])} ⚡ {text.strip().rstrip('.!?,; ')} [{ptr}]"
                 for i, (ptr, text) in enumerate(pointers_and_texts[:4])
             ]
             return "\n\n".join(thread_items) + "\n\n🔒 Governed & verified under active compliance ceiling. #FactualAI"
         elif "advisory" in lower_prompt:
-            bullets = "\n".join([f"{i+1}. DIRECTIVE: {text.strip()} [{ptr}]" for i, (ptr, text) in enumerate(pointers_and_texts[:4])])
+            bullets = "\n".join([f"{i+1}. DIRECTIVE: {text.strip().rstrip('.!?,; ')} [{ptr}]." for i, (ptr, text) in enumerate(pointers_and_texts[:4])])
             return (
                 "### OPERATIONAL COMPLIANCE ADVISORY NOTICE\n\n"
                 "**Authority:** Governed Enterprise Transformation Office\n"
@@ -109,7 +109,7 @@ class OllamaClient:
                 "All secondary distributions must preserve canonical source pointers and adhere to the active disclosure ceiling."
             )
         elif "infographic" in lower_prompt:
-            stats = "\n".join([f"• METRIC CALLOUT: {text.strip()} [{ptr}]" for ptr, text in pointers_and_texts[:4]])
+            stats = "\n".join([f"• METRIC CALLOUT: {text.strip().rstrip('.!?,; ')} [{ptr}]" for ptr, text in pointers_and_texts[:4]])
             return (
                 "### INFOGRAPHIC DATA BRIEF & VISUAL SPECIFICATION\n\n"
                 "**Core Numerical Facts & Quantitative Milestones:**\n"
@@ -122,7 +122,7 @@ class OllamaClient:
         elif "presentation" in lower_prompt:
             slides = [
                 f"### Slide {i+1}: Strategic Initiative Finding\n"
-                f"- **Core Finding:** {text.strip()} [{ptr}]\n"
+                f"- **Core Finding:** {text.strip().rstrip('.!?,; ')} [{ptr}].\n"
                 f"- **Context:** Directly grounded in primary source coordinate verification.\n"
                 f"- **Speaker Note:** Emphasize the quantifiable metrics and compliance adherence."
                 for i, (ptr, text) in enumerate(pointers_and_texts[:4])
@@ -132,16 +132,18 @@ class OllamaClient:
             scenes = [
                 f"[SCENE {i+1} - 0:0{i*10}s - 0:0{(i+1)*10}s]\n"
                 f"Visual: Modern data graphic and operational footage.\n"
-                f"Narration: \"{text.strip()}\" [{ptr}]\n"
-                f"On-Screen Text: {text.strip()[:60]}... [{ptr}]\n"
+                f"Narration: \"{text.strip().rstrip('.!?,; ')}\" [{ptr}].\n"
+                f"On-Screen Text: {text.strip().rstrip('.!?,; ')[:60]}... [{ptr}]\n"
                 for i, (ptr, text) in enumerate(pointers_and_texts[:3])
             ]
             return "### VIDEO PACKAGE & PRODUCTION STORYBOARD\n\n" + "\n".join(scenes)
         else:
             # Executive Summary (default)
-            lead = f"This strategic executive review synthesizes key findings in accordance with governed organizational directives. {pointers_and_texts[0][1].strip()} [{pointers_and_texts[0][0]}]."
-            body = " ".join([f"{text.strip()} [{ptr}]." for ptr, text in pointers_and_texts[1:4]]) if len(pointers_and_texts) > 1 else ""
-            conclusion = "All factual statements have been entails-verified against primary source coordinates with zero ungrounded hallucination."
+            clean_t0 = pointers_and_texts[0][1].strip().rstrip(".!?,; ")
+            ptr0 = pointers_and_texts[0][0]
+            lead = f"This strategic executive review synthesizes key findings in accordance with governed organizational directives: {clean_t0} [{ptr0}]."
+            body = " ".join([f"{text.strip().rstrip('.!?,; ')} [{ptr}]." for ptr, text in pointers_and_texts[1:4]]) if len(pointers_and_texts) > 1 else ""
+            conclusion = f"All operational milestones and governance metrics remain directly grounded in primary source verification [{ptr0}]."
             
             summary_sections = [
                 "### Executive Summary: Governed Operational Report",

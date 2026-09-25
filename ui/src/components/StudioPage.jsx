@@ -346,12 +346,17 @@ export default function StudioPage({
             governance_config: { disclosure_level: disclosureLevel, domain_profile: domainProfile, audience, tone },
             claims: firstOut?.claims || [],
           });
-          if (pRes && pRes.record) {
-            setProvenanceRecord(pRes.record);
-            setIntegrityStatus({ status: "DRAFT", hash: pRes.record.integrity_hash, signer: approverId });
+          const draftRecord = pRes?.data || pRes?.record;
+          if (draftRecord) {
+            setProvenanceRecord(draftRecord);
+            setIntegrityStatus({
+              status: "DRAFT",
+              hash: draftRecord.integrity_hash || pRes.integrity_hash,
+              signer: approverId,
+            });
           }
         } catch (e) {
-          console.error(e);
+          console.error("Auto build provenance draft error:", e);
         }
 
         // Move to Stage 5 Generation & Audit Output
@@ -400,26 +405,42 @@ export default function StudioPage({
   const handlePublish = async () => {
     setIsPublishing(true);
     try {
-      const targetId = provenanceRecord?.provenance_id || `prov_${Date.now()}`;
-      const res = await publishProvenanceRecord(targetId, {
+      let recordToPublish = provenanceRecord;
+      if (!recordToPublish?.provenance_id) {
+        // Auto-build manifest if not already present
+        const pRes = await buildProvenanceRecord({
+          document_id: documentId || "doc_sample",
+        });
+        recordToPublish = pRes?.data || pRes?.record;
+        if (recordToPublish) {
+          setProvenanceRecord(recordToPublish);
+        }
+      }
+
+      if (!recordToPublish?.provenance_id) {
+        throw new Error("Unable to locate or initialize provenance record for document.");
+      }
+
+      const res = await publishProvenanceRecord(recordToPublish.provenance_id, {
         approver_id: approverId,
         domain_notes: `Approved for ${disclosureLevel} distribution under ${domainProfile} standard.`,
       });
 
-      if (res && res.record) {
-        setProvenanceRecord(res.record);
+      const publishedRecord = res?.data || res?.record || recordToPublish;
+      if (publishedRecord) {
+        setProvenanceRecord(publishedRecord);
         setIntegrityStatus({
           status: "PUBLISHED",
-          hash: res.record.integrity_hash,
-          signer: res.record.approver_id || approverId,
+          hash: publishedRecord.integrity_hash || res.integrity_hash,
+          signer: publishedRecord.approver_id || approverId,
         });
 
         // Save to Audit Manifest Store
         StorageService.addManifest({
-          provenance_id: res.record.provenance_id || targetId,
+          provenance_id: publishedRecord.provenance_id,
           document_id: documentId || "doc_sample",
           channel: activeChannelTab,
-          integrity_hash: res.record.integrity_hash,
+          integrity_hash: publishedRecord.integrity_hash || res.integrity_hash,
           approver: approverId,
           timestamp: new Date().toISOString(),
           status: "PUBLISHED",
@@ -435,15 +456,21 @@ export default function StudioPage({
 
   // 5. Verify Manifest Integrity
   const handleVerifyIntegrity = async () => {
-    if (!provenanceRecord) return;
+    if (!provenanceRecord?.provenance_id) {
+      alert("No active provenance manifest found to verify.");
+      return;
+    }
     try {
       const res = await verifyProvenanceIntegrity(provenanceRecord.provenance_id);
       if (res) {
+        const isValid = res.is_valid !== false;
+        const status = res.record_status || provenanceRecord.status || "PUBLISHED";
+        const hash = res.integrity_hash || provenanceRecord.integrity_hash;
         alert(
-          `Manifest Cryptographic Verification:\n` +
-          `Status: ${res.verification_status}\n` +
-          `Tamper Sealed: ${res.tamper_detected ? "TAMPER DETECTED!" : "VALID / UNTAMPERED"}\n` +
-          `SHA-256 Digest: ${res.computed_hash}`
+          `Manifest Cryptographic Verification:\n\n` +
+          `Status: ${status}\n` +
+          `Tamper Sealed: ${isValid ? "VALID / UNTAMPERED (Seal Intact)" : "TAMPER DETECTED / INVALID"}\n` +
+          `SHA-256 Digest: ${hash}`
         );
       }
     } catch (err) {
@@ -453,7 +480,13 @@ export default function StudioPage({
 
   const handleCopyChannelText = (text, chKey) => {
     if (!text) return;
-    navigator.clipboard.writeText(text);
+    // Strip citation pointer tags like [doc_xxx#p_0] or [SYNTHETIC_MODEL_GENERATED]
+    const cleanText = text
+      .replace(/\s*\[[a-zA-Z0-9_\-#]+\]/g, "")
+      .replace(/\s+([.,;:!?])/g, "$1")
+      .replace(/[ \t]{2,}/g, " ")
+      .trim();
+    navigator.clipboard.writeText(cleanText);
     setCopiedChannel(chKey);
     setTimeout(() => setCopiedChannel(null), 2000);
   };
@@ -487,6 +520,8 @@ export default function StudioPage({
               cursor: "pointer",
               verticalAlign: "middle",
               transition: "all var(--transition-fast)",
+              userSelect: "none",
+              WebkitUserSelect: "none",
             }}
             onMouseEnter={(e) => {
               e.currentTarget.style.background = "#ffedd5";
