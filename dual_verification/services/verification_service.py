@@ -11,6 +11,7 @@ from dual_verification.models.verification_models import (
 from dual_verification.services.primary_verifier import PrimaryVerifier
 from dual_verification.services.secondary_verifier import SecondaryVerifier
 from dual_verification.services.arbiter import VerificationArbiter
+from dual_verification.services.appropriateness_verifier import AppropriatenessVerifier
 from dual_verification.services.storage_service import VerificationStorageService
 
 DEFAULT_EXTRACTION_STORAGE_DIR = (
@@ -23,7 +24,7 @@ DEFAULT_GENERATION_STORAGE_DIR = (
 class VerificationService:
     """
     Central Verification Orchestrator linking Generation claims with Extraction blocks,
-    executing Dual Verification (Primary LLM NLI + Secondary Rule/Entity gate),
+    executing Dual Verification (Gate 1: Fidelity + Gate 2: Appropriateness),
     and arbitrating consensus verdicts.
     """
     def __init__(
@@ -31,6 +32,7 @@ class VerificationService:
         primary_verifier: Optional[PrimaryVerifier] = None,
         secondary_verifier: Optional[SecondaryVerifier] = None,
         arbiter: Optional[VerificationArbiter] = None,
+        appropriateness_verifier: Optional[AppropriatenessVerifier] = None,
         storage_dir: Optional[Path] = None,
         extraction_storage_dir: Optional[Path] = None,
         generation_storage_dir: Optional[Path] = None
@@ -38,6 +40,7 @@ class VerificationService:
         self.primary = primary_verifier or PrimaryVerifier()
         self.secondary = secondary_verifier or SecondaryVerifier()
         self.arbiter = arbiter or VerificationArbiter()
+        self.appropriateness = appropriateness_verifier or AppropriatenessVerifier()
         self.storage = VerificationStorageService(storage_dir=storage_dir)
         self.extraction_dir = Path(extraction_storage_dir) if extraction_storage_dir else DEFAULT_EXTRACTION_STORAGE_DIR
         self.generation_dir = Path(generation_storage_dir) if generation_storage_dir else DEFAULT_GENERATION_STORAGE_DIR
@@ -122,15 +125,26 @@ class VerificationService:
             # 2. Secondary Verifier (Rules/Entities)
             sec_verdict, sec_conf, sec_details = self.secondary.verify(stmt, evidence)
 
-            # 3. Arbiter Consensus
+            # 3. Arbiter Consensus (Gate 1: Fidelity)
             final_v, final_conf, final_note = self.arbiter.arbitrate(
                 prim_verdict, prim_conf, sec_verdict, sec_conf
+            )
+
+            # 4. Gate 2: Appropriateness (Disclosure, PII, Audience)
+            app_result = self.appropriateness.verify(
+                statement=stmt,
+                max_disclosure_level=request.disclosure_level or "PUBLIC",
+                source_evidence=evidence,
+                target_audience=request.target_audience or "general_public",
             )
 
             if final_v == VerificationVerdict.VERIFIED:
                 verified_count += 1
             else:
                 discrepancies.append(f"{c_id}: {final_v.value} — {final_note} (NLI: {prim_reasoning}; Rule: {sec_details})")
+
+            if not app_result.passed:
+                discrepancies.append(f"{c_id}: Appropriateness violation [{app_result.verdict.value}]: {', '.join(app_result.violations)}")
 
             verified_claims.append(ClaimVerificationResult(
                 claim_id=c_id,
@@ -140,7 +154,8 @@ class VerificationService:
                 secondary_verdict=sec_verdict,
                 final_verdict=final_v,
                 confidence=final_conf,
-                reasoning=f"{final_note} | NLI: {prim_reasoning} | Entities: {sec_details}"
+                reasoning=f"{final_note} | NLI: {prim_reasoning} | Entities: {sec_details}",
+                appropriateness=app_result,
             ))
 
         total = len(verified_claims)
@@ -152,11 +167,21 @@ class VerificationService:
         elif any(vc.final_verdict == VerificationVerdict.UNSUPPORTED for vc in verified_claims):
             overall_status = VerificationVerdict.UNSUPPORTED
 
+        from dual_verification.models.verification_models import AppropriatenessVerdict
+        overall_appropriateness = AppropriatenessVerdict.APPROPRIATE
+        if any(vc.appropriateness and vc.appropriateness.verdict == AppropriatenessVerdict.DISCLOSURE_VIOLATION for vc in verified_claims):
+            overall_appropriateness = AppropriatenessVerdict.DISCLOSURE_VIOLATION
+        elif any(vc.appropriateness and vc.appropriateness.verdict == AppropriatenessVerdict.PII_FLAGGED for vc in verified_claims):
+            overall_appropriateness = AppropriatenessVerdict.PII_FLAGGED
+        elif any(vc.appropriateness and vc.appropriateness.verdict == AppropriatenessVerdict.INAPPROPRIATE_TONE for vc in verified_claims):
+            overall_appropriateness = AppropriatenessVerdict.INAPPROPRIATE_TONE
+
         result = VerificationResult(
             verification_id=verification_id,
             generation_id=gen_id,
             document_id=doc_id,
             overall_status=overall_status,
+            overall_appropriateness=overall_appropriateness,
             verified_claims=verified_claims,
             discrepancies=discrepancies,
             pass_rate=pass_rate
