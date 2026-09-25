@@ -4,10 +4,12 @@ from generation.graph.nodes import (
     governed_generate_node,
     decompose_claims_node,
 )
+from generation.graph.workflow import create_generation_workflow
 
 __all__ = [
     "GenerationState",
     "prepare_context_node",
     "governed_generate_node",
     "decompose_claims_node",
+    "create_generation_workflow",
 ]
