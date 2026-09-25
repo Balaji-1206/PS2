@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { Shield, Layers, Sparkles, Terminal, ExternalLink, Activity } from "lucide-react";
+import { Shield, Layers, Sparkles, BookOpen, ExternalLink, Activity } from "lucide-react";
 import { checkHealth } from "../services/api";
 
 export default function Navbar({ activeTab, setActiveTab }) {
@@ -14,7 +14,7 @@ export default function Navbar({ activeTab, setActiveTab }) {
       }
     };
     poll();
-    const interval = setInterval(poll, 10000);
+    const interval = setInterval(poll, 8000);
     return () => {
       isMounted = false;
       clearInterval(interval);
@@ -28,11 +28,12 @@ export default function Navbar({ activeTab, setActiveTab }) {
       position: "sticky",
       top: 0,
       zIndex: 50,
-      background: "rgba(5, 8, 22, 0.85)",
-      backdropFilter: "blur(16px)",
-      WebkitBackdropFilter: "blur(16px)",
-      borderBottom: "1px solid var(--border-subtle)",
-      padding: "14px 32px",
+      background: "rgba(255, 255, 255, 0.92)",
+      backdropFilter: "blur(20px)",
+      WebkitBackdropFilter: "blur(20px)",
+      borderBottom: "1px solid rgba(245, 158, 11, 0.20)",
+      boxShadow: "0 2px 12px -2px rgba(217, 119, 6, 0.06)",
+      padding: "16px 32px",
     }}>
       <div style={{
         maxWidth: "1680px",
@@ -54,18 +55,18 @@ export default function Navbar({ activeTab, setActiveTab }) {
           }}
         >
           <div style={{
-            width: "40px",
-            height: "40px",
+            width: "42px",
+            height: "42px",
             borderRadius: "12px",
-            background: "linear-gradient(135deg, rgba(2, 132, 199, 0.85), rgba(37, 99, 235, 0.85))",
-            border: "1px solid rgba(56, 189, 248, 0.3)",
+            background: "linear-gradient(135deg, #ea580c 0%, #f59e0b 100%)",
+            border: "1px solid rgba(255, 255, 255, 0.4)",
             display: "flex",
             alignItems: "center",
             justifyContent: "center",
-            boxShadow: "0 2px 10px rgba(2, 132, 199, 0.25)",
+            boxShadow: "0 3px 14px rgba(234, 88, 12, 0.30)",
             transition: "all var(--transition-fast)",
           }}>
-            <Shield size={22} color="#ffffff" strokeWidth={2.2} />
+            <Shield size={22} color="#ffffff" strokeWidth={2.4} />
           </div>
           <div>
             <div style={{
@@ -75,21 +76,21 @@ export default function Navbar({ activeTab, setActiveTab }) {
             }}>
               <span style={{
                 fontFamily: "var(--font-heading)",
-                fontSize: "17px",
-                fontWeight: 700,
-                letterSpacing: "-0.02em",
-                color: "#f8fafc",
+                fontSize: "18px",
+                fontWeight: 800,
+                letterSpacing: "-0.025em",
+                color: "#0f172a",
               }}>
                 VERITAS
               </span>
               <span style={{
                 fontSize: "11px",
-                fontWeight: 600,
+                fontWeight: 700,
                 padding: "2px 7px",
                 borderRadius: "4px",
-                background: "rgba(255, 255, 255, 0.05)",
-                border: "1px solid var(--border-subtle)",
-                color: "var(--text-muted)",
+                background: "#fff7ed",
+                border: "1px solid rgba(249, 115, 22, 0.25)",
+                color: "#c2410c",
                 letterSpacing: "0.04em",
               }}>
                 STUDIO
@@ -97,17 +98,18 @@ export default function Navbar({ activeTab, setActiveTab }) {
             </div>
             <div style={{ 
               fontSize: "12px", 
-              color: "var(--text-dim)", 
+              color: "#64748b", 
               letterSpacing: "0.01em",
               marginTop: "1px",
+              fontWeight: 500,
             }}>
               Governed Transformation Engine
             </div>
           </div>
         </div>
 
-        {/* View Switcher: Segmented Control (Linear/Arc style) */}
-        <nav className="segmented-control" style={{ maxWidth: "360px", width: "100%" }}>
+        {/* View Switcher: Segmented Control */}
+        <nav className="segmented-control" style={{ maxWidth: "380px", width: "100%" }}>
           <button
             onClick={() => setActiveTab("landing")}
             className={`segmented-control-btn ${activeTab === "landing" ? "active" : ""}`}
@@ -127,34 +129,34 @@ export default function Navbar({ activeTab, setActiveTab }) {
           </button>
         </nav>
 
-        {/* Gateway Status Pill & API Docs Ghost Button */}
+        {/* Right Section: Compact Status Pill & Secondary Ghost API Docs Button */}
         <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
-          {/* Status Pill */}
+          {/* Gateway Status as Compact Pill */}
           <div style={{
             display: "inline-flex",
             alignItems: "center",
             gap: "7px",
             padding: "5px 12px",
             borderRadius: "var(--radius-pill)",
-            background: isOnline ? "rgba(16, 185, 129, 0.08)" : "rgba(239, 68, 68, 0.08)",
-            border: `1px solid ${isOnline ? "rgba(16, 185, 129, 0.25)" : "rgba(239, 68, 68, 0.25)"}`,
+            background: isOnline ? "#ecfdf5" : "#fef2f2",
+            border: `1px solid ${isOnline ? "#a7f3d0" : "#fecaca"}`,
             fontSize: "12px",
-            color: isOnline ? "#34d399" : "#f87171",
-            fontFamily: "var(--font-mono)",
-            fontWeight: 500,
+            fontWeight: 600,
           }}>
             <span style={{
-              width: "6px",
-              height: "6px",
+              width: "7px",
+              height: "7px",
               borderRadius: "50%",
-              background: isOnline ? "#10b981" : "#ef4444",
-              boxShadow: isOnline ? "0 0 8px rgba(16, 185, 129, 0.6)" : "none",
+              backgroundColor: isOnline ? "#10b981" : "#ef4444",
+              boxShadow: `0 0 6px ${isOnline ? "#10b981" : "#ef4444"}`,
               display: "inline-block",
             }} />
-            {isOnline ? "Gateway :8000 Active" : "Backend Offline"}
+            <span style={{ color: isOnline ? "#047857" : "#dc2626" }}>
+              {isOnline ? "Gateway Active" : "Gateway Offline"}
+            </span>
           </div>
 
-          {/* API Docs Ghost Button */}
+          {/* Secondary Ghost Button: API Docs */}
           <a
             href="http://localhost:8000/docs"
             target="_blank"
@@ -162,16 +164,14 @@ export default function Navbar({ activeTab, setActiveTab }) {
             className="btn btn-ghost btn-sm"
             style={{
               gap: "6px",
-              fontSize: "13px",
-              padding: "0 12px",
-              color: "var(--text-muted)",
-              height: "32px",
+              border: "1px solid rgba(245, 158, 11, 0.28)",
+              background: "#ffffff",
+              color: "#78350f",
             }}
-            title="Open Interactive API Docs (Swagger OpenAPI)"
           >
-            <Terminal size={14} />
+            <BookOpen size={14} color="#ea580c" />
             API Docs
-            <ExternalLink size={12} style={{ opacity: 0.6 }} />
+            <ExternalLink size={12} color="#94a3b8" />
           </a>
         </div>
       </div>

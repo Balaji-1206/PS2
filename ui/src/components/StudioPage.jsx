@@ -1,16 +1,17 @@
-import React, { useState, useEffect } from "react";
+import React, { useState } from "react";
 import { 
   FileText, Upload, Globe, Cpu, Sliders, Shield, ShieldCheck, 
   Share2, KeyRound, CheckCircle2, AlertTriangle, Eye, Lock, 
   Sparkles, RefreshCw, Copy, Check, ArrowRight, CornerDownRight, 
   MapPin, ShieldAlert, Award, FileCode, CheckSquare, MessageCircle,
   LayoutGrid, Layers, Clock, Hash, UserCheck, ShieldQuestion,
-  ChevronDown, Database, ExternalLink, HelpCircle, AlertCircle, Video
+  ChevronDown, Database, ExternalLink, HelpCircle, AlertCircle, Video,
+  Users, Volume2, Languages, ListFilter, BookOpen
 } from "lucide-react";
 import { 
   extractContent, getClaimBank, generateChannels, 
   verifyContent, buildProvenanceRecord, publishProvenanceRecord, 
-  verifyProvenanceIntegrity 
+  verifyProvenanceIntegrity, checkHealth 
 } from "../services/api";
 
 const PRESET_TEMPLATES = {
@@ -88,7 +89,28 @@ const CHANNEL_DEFINITIONS = [
   },
 ];
 
-export default function StudioPage({ onOpenTraceModal }) {
+export default function StudioPage({ onOpenTraceModal, onBackToOverview }) {
+  // --- Gateway Health State ---
+  const [isGatewayOnline, setIsGatewayOnline] = useState(true);
+
+  React.useEffect(() => {
+    let isMounted = true;
+    const poll = async () => {
+      try {
+        const res = await checkHealth();
+        if (isMounted) setIsGatewayOnline(res?.status === "ok");
+      } catch {
+        if (isMounted) setIsGatewayOnline(false);
+      }
+    };
+    poll();
+    const interval = setInterval(poll, 8000);
+    return () => {
+      isMounted = false;
+      clearInterval(interval);
+    };
+  }, []);
+
   // --- Ingestion State ---
   const [inputMode, setInputMode] = useState("text"); // text, file, url, free_prompt
   const [sourceText, setSourceText] = useState(PRESET_TEMPLATES.energy.text);
@@ -126,7 +148,6 @@ export default function StudioPage({ onOpenTraceModal }) {
   const [isPublishing, setIsPublishing] = useState(false);
   const [integrityStatus, setIntegrityStatus] = useState(null);
   const [copiedChannel, setCopiedChannel] = useState(null);
-  const [manifestCopied, setManifestCopied] = useState(false);
 
   // Helper for sensitivity level hierarchy
   const SENSITIVITY_HIERARCHY = { PUBLIC: 1, INTERNAL: 2, CONFIDENTIAL: 3, RESTRICTED: 4 };
@@ -250,40 +271,62 @@ export default function StudioPage({ onOpenTraceModal }) {
     }
   };
 
-  // 4. Assemble Provenance Record
+  // 4. Provenance Manifest Trigger
   const handleBuildProvenance = async () => {
+    if (!channelOutputs) {
+      alert("Generate channel collateral before creating an audit manifest.");
+      return;
+    }
+
     try {
+      const currentOutput = channelOutputs[activeChannelTab];
       const res = await buildProvenanceRecord({
-        document_id: documentId,
-        source_content: sourceText,
-        source_type: inputMode,
+        document_id: documentId || "doc_sample",
+        channel: activeChannelTab,
+        output_text: currentOutput?.generated_text || "",
+        governance_config: {
+          disclosure_level: disclosureLevel,
+          domain_profile: domainProfile,
+          audience,
+          tone,
+        },
+        claims: currentOutput?.claims || [],
       });
-      if (res && res.data) {
-        setProvenanceRecord(res.data);
-        setIntegrityStatus({ is_valid: true, hash: res.data.integrity_hash, status: "DRAFT" });
+
+      if (res && res.record) {
+        setProvenanceRecord(res.record);
+        setIntegrityStatus({
+          status: "DRAFT",
+          hash: res.record.integrity_hash,
+          signer: approverId,
+        });
       }
     } catch (err) {
-      alert(`Provenance Build Error: ${err.message}`);
+      alert(`Manifest Error: ${err.message}`);
     }
   };
 
-  // 5. Sign and Publish Manifest
+  // 5. Sign & Publish Trigger
   const handlePublish = async () => {
     if (!provenanceRecord) {
       await handleBuildProvenance();
     }
-    if (!provenanceRecord?.provenance_id) return;
 
     setIsPublishing(true);
     try {
-      const res = await publishProvenanceRecord(provenanceRecord.provenance_id, {
+      const targetId = provenanceRecord?.provenance_id || `prov_${Date.now()}`;
+      const res = await publishProvenanceRecord(targetId, {
         approver_id: approverId,
-        digital_signature: `sig_ed25519_${Date.now().toString(16)}`,
-        disclosure_level: disclosureLevel,
+        domain_notes: `Approved for ${disclosureLevel} distribution under ${domainProfile} standard.`,
       });
-      if (res && res.data) {
-        setProvenanceRecord(res.data);
-        setIntegrityStatus({ is_valid: true, hash: res.data.integrity_hash, status: "PUBLISHED" });
+
+      if (res && res.record) {
+        setProvenanceRecord(res.record);
+        setIntegrityStatus({
+          status: "PUBLISHED",
+          hash: res.record.integrity_hash,
+          signer: res.record.approver_id || approverId,
+        });
       }
     } catch (err) {
       alert(`Publication Error: ${err.message}`);
@@ -292,61 +335,68 @@ export default function StudioPage({ onOpenTraceModal }) {
     }
   };
 
-  // 6. Verify Manifest Cryptographic Integrity
+  // 6. Verify Manifest Integrity
   const handleVerifyIntegrity = async () => {
-    if (!provenanceRecord?.provenance_id) return;
+    if (!provenanceRecord) return;
     try {
       const res = await verifyProvenanceIntegrity(provenanceRecord.provenance_id);
-      setIntegrityStatus(res);
+      if (res) {
+        alert(
+          `Manifest Cryptographic Verification:\n` +
+          `Status: ${res.verification_status}\n` +
+          `Tamper Sealed: ${res.tamper_detected ? "TAMPER DETECTED!" : "VALID / UNTAMPERED"}\n` +
+          `SHA-256 Digest: ${res.computed_hash}`
+        );
+      }
     } catch (err) {
-      alert(`Integrity Check Error: ${err.message}`);
+      alert(`Verification check error: ${err.message}`);
     }
   };
 
-  // Copy output text
   const handleCopyChannelText = (text, chKey) => {
+    if (!text) return;
     navigator.clipboard.writeText(text);
     setCopiedChannel(chKey);
     setTimeout(() => setCopiedChannel(null), 2000);
   };
 
-  // Helper to render citation links inside generated text
+  // Render citation markers as interactive warm orange-gold pills
   const renderTextWithCitations = (text) => {
-    if (!text) return "";
-    const parts = text.split(/(\[[a-zA-Z0-9_#]+\])/g);
-    return parts.map((part, i) => {
-      const match = part.match(/^\[([a-zA-Z0-9_#]+)\]$/);
+    if (!text) return null;
+    const parts = text.split(/(\[[a-zA-Z0-9_\-#]+\])/g);
+    return parts.map((part, idx) => {
+      const match = part.match(/^\[([a-zA-Z0-9_\-#]+)\]$/);
       if (match) {
         const ptr = match[1];
         return (
           <button
-            key={i}
+            key={idx}
             onClick={() => onOpenTraceModal(ptr)}
-            title={`Inspect reverse layout coordinates: ${ptr}`}
+            title={`Inspect Docling coordinate bounding box for ${ptr}`}
             style={{
               display: "inline-flex",
               alignItems: "center",
               gap: "4px",
-              padding: "2px 7px",
+              padding: "2px 8px",
               margin: "0 3px",
               borderRadius: "5px",
-              background: "rgba(56, 189, 248, 0.12)",
-              border: "1px solid rgba(56, 189, 248, 0.35)",
-              color: "var(--accent-cyan)",
+              background: "#fff7ed",
+              border: "1px solid #fed7aa",
+              color: "#c2410c",
               fontSize: "12px",
               fontFamily: "var(--font-mono)",
-              fontWeight: 600,
+              fontWeight: 700,
               cursor: "pointer",
               verticalAlign: "middle",
               transition: "all var(--transition-fast)",
             }}
             onMouseEnter={(e) => {
-              e.currentTarget.style.background = "rgba(56, 189, 248, 0.22)";
-              e.currentTarget.style.borderColor = "var(--accent-cyan)";
+              e.currentTarget.style.background = "#ffedd5";
+              e.currentTarget.style.borderColor = "#ea580c";
             }}
             onMouseLeave={(e) => {
-              e.currentTarget.style.background = "rgba(56, 189, 248, 0.12)";
-              e.currentTarget.style.borderColor = "rgba(56, 189, 248, 0.35)";
+              e.currentTarget.style.background = "#fff7ed";
+              e.currentTarget.style.borderColor = "#fed7aa";
             }}
           >
             <MapPin size={11} />
@@ -358,7 +408,6 @@ export default function StudioPage({ onOpenTraceModal }) {
     });
   };
 
-  // Sensitivity level styles
   const getBadgeClass = (label) => {
     switch (label) {
       case "PUBLIC": return "badge-public";
@@ -385,63 +434,144 @@ export default function StudioPage({ onOpenTraceModal }) {
         justifyContent: "space-between",
         flexWrap: "wrap",
         gap: "16px",
-        paddingBottom: "20px",
-        borderBottom: "1px solid var(--border-subtle)",
+        paddingBottom: "22px",
+        borderBottom: "1px solid rgba(245, 158, 11, 0.20)",
       }}>
-        <div>
-          <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-            <h1>Governed Transformation Studio</h1>
-            <span className="badge-pill badge-public" style={{ fontSize: "11px", fontWeight: 700 }}>
-              ENTERPRISE ACTIVE
-            </span>
+        <div style={{ display: "flex", alignItems: "center", gap: "16px" }}>
+          <div style={{
+            width: "44px",
+            height: "44px",
+            borderRadius: "12px",
+            background: "linear-gradient(135deg, #ea580c 0%, #f59e0b 100%)",
+            border: "1px solid rgba(255, 255, 255, 0.4)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            boxShadow: "0 3px 14px rgba(234, 88, 12, 0.28)",
+            flexShrink: 0,
+          }}>
+            <Shield size={24} color="#ffffff" strokeWidth={2.4} />
           </div>
-          <p className="text-body" style={{ marginTop: "4px" }}>
-            Extract atomic source assertions, enforce pre-generation disclosure gating, render parallel channel collateral, and verify fidelity.
-          </p>
+
+          <div>
+            <div style={{ display: "flex", alignItems: "center", gap: "12px", flexWrap: "wrap" }}>
+              <h1 className="text-page-title" style={{ color: "#0f172a" }}>Governed Transformation Studio</h1>
+              <span className="badge-pill badge-confidential" style={{ fontSize: "11px", fontWeight: 700 }}>
+                ENTERPRISE ACTIVE
+              </span>
+            </div>
+            <p className="text-body" style={{ marginTop: "4px", color: "#475569" }}>
+              Extract atomic source assertions, enforce pre-generation disclosure gating, render parallel channel collateral, and verify fidelity.
+            </p>
+          </div>
         </div>
 
-        {documentId && (
+        {/* Right Section: Ingestion ID, Status Pill, Overview & API Docs */}
+        <div style={{ display: "flex", alignItems: "center", gap: "12px", flexWrap: "wrap" }}>
+          {documentId && (
+            <div style={{
+              display: "inline-flex",
+              alignItems: "center",
+              gap: "8px",
+              background: "#ffffff",
+              border: "1px solid rgba(245, 158, 11, 0.35)",
+              borderRadius: "var(--radius-pill)",
+              padding: "6px 14px",
+              fontSize: "13px",
+              boxShadow: "0 2px 8px rgba(217, 119, 6, 0.06)",
+            }}>
+              <span style={{
+                width: "7px",
+                height: "7px",
+                borderRadius: "50%",
+                background: "#ea580c",
+                boxShadow: "0 0 8px rgba(234, 88, 12, 0.6)",
+                display: "inline-block",
+              }} />
+              <span style={{ color: "#64748b", fontWeight: 500 }}>Ingestion:</span>
+              <span className="font-mono" style={{ color: "#0f172a", fontWeight: 700 }}>{documentId}</span>
+            </div>
+          )}
+
+          {/* Compact Gateway Status Pill */}
           <div style={{
             display: "inline-flex",
             alignItems: "center",
-            gap: "10px",
-            background: "rgba(10, 16, 29, 0.8)",
-            border: "1px solid var(--border-medium)",
-            borderRadius: "var(--radius-pill)",
+            gap: "7px",
             padding: "6px 14px",
-            fontSize: "13px",
-            boxShadow: "0 2px 8px rgba(0, 0, 0, 0.3)",
+            borderRadius: "var(--radius-pill)",
+            background: isGatewayOnline ? "#ecfdf5" : "#fef2f2",
+            border: `1px solid ${isGatewayOnline ? "#a7f3d0" : "#fecaca"}`,
+            fontSize: "12px",
+            fontWeight: 600,
           }}>
             <span style={{
               width: "7px",
               height: "7px",
               borderRadius: "50%",
-              background: "var(--accent-cyan)",
-              boxShadow: "0 0 8px var(--accent-cyan)",
+              backgroundColor: isGatewayOnline ? "#10b981" : "#ef4444",
+              boxShadow: `0 0 6px ${isGatewayOnline ? "#10b981" : "#ef4444"}`,
               display: "inline-block",
             }} />
-            <span style={{ color: "var(--text-dim)" }}>Active Ingestion:</span>
-            <span className="font-mono" style={{ color: "#f8fafc", fontWeight: 600 }}>{documentId}</span>
+            <span style={{ color: isGatewayOnline ? "#047857" : "#dc2626" }}>
+              {isGatewayOnline ? "Gateway Active" : "Gateway Offline"}
+            </span>
           </div>
-        )}
+
+          {/* API Docs Button */}
+          <a
+            href="http://localhost:8000/docs"
+            target="_blank"
+            rel="noreferrer"
+            className="btn btn-secondary btn-sm"
+            style={{
+              gap: "6px",
+              height: "34px",
+              fontSize: "12px",
+              color: "#78350f",
+            }}
+          >
+            <BookOpen size={14} color="#ea580c" />
+            API Docs
+            <ExternalLink size={12} color="#94a3b8" />
+          </a>
+
+          {/* Architecture Overview Toggle */}
+          {onBackToOverview && (
+            <button
+              onClick={onBackToOverview}
+              className="btn btn-secondary btn-sm"
+              style={{
+                gap: "6px",
+                height: "34px",
+                fontSize: "12px",
+                color: "#78350f",
+              }}
+            >
+              <Layers size={14} color="#ea580c" />
+              Architecture Overview
+            </button>
+          )}
+        </div>
       </div>
 
       {/* 3-Column Structured Layout (280px | Flexible | 340px) */}
       <div className="studio-grid">
+        
         {/* ========================================================= */}
         {/* COLUMN 1: Source Ingestion & Operator Governance (280px)  */}
         {/* ========================================================= */}
         <div className="studio-col-left" style={{ display: "flex", flexDirection: "column", gap: "24px" }}>
           
           {/* Card 1: Source Ingestion */}
-          <div className="studio-card">
+          <div className="studio-card" style={{ display: "flex", flexDirection: "column", minHeight: "440px" }}>
             <div className="studio-card-header">
               <div className="studio-card-title-group">
                 <div className="studio-card-icon">
-                  <FileText size={17} color="var(--accent-cyan)" />
+                  <FileText size={18} color="#ea580c" />
                 </div>
                 <div>
-                  <h2>Source Ingestion</h2>
+                  <h3 className="text-card-title">Source Ingestion</h3>
                   <div className="text-meta">Multi-modality ingest</div>
                 </div>
               </div>
@@ -459,7 +589,7 @@ export default function StudioPage({ onOpenTraceModal }) {
                   key={m.id}
                   onClick={() => setInputMode(m.id)}
                   className={`segmented-control-btn ${inputMode === m.id ? "active-blue" : ""}`}
-                  style={{ fontSize: "12px", padding: "5px 2px" }}
+                  style={{ fontSize: "12px", padding: "6px 2px" }}
                 >
                   {m.label}
                 </button>
@@ -468,10 +598,10 @@ export default function StudioPage({ onOpenTraceModal }) {
 
             {/* Presets Demo Bar (Text Mode) */}
             {inputMode === "text" && (
-              <div style={{ marginBottom: "12px" }}>
+              <div style={{ marginBottom: "14px" }}>
                 <div className="text-label" style={{ marginBottom: "6px", display: "flex", justifyContent: "space-between" }}>
                   <span>Demo Template:</span>
-                  <span className="text-meta" style={{ color: "var(--accent-cyan)" }}>Click to load</span>
+                  <span className="text-meta" style={{ color: "#ea580c", fontWeight: 600 }}>Click to load</span>
                 </div>
                 <div style={{ display: "flex", gap: "6px", flexWrap: "wrap" }}>
                   {Object.entries(PRESET_TEMPLATES).map(([k, t]) => (
@@ -480,10 +610,11 @@ export default function StudioPage({ onOpenTraceModal }) {
                       onClick={() => setSourceText(t.text)}
                       className="btn btn-secondary btn-sm"
                       style={{
-                        padding: "0 8px",
+                        padding: "0 9px",
                         fontSize: "11px",
                         height: "26px",
                         borderRadius: "6px",
+                        fontWeight: 600,
                       }}
                       title={t.title}
                     >
@@ -496,30 +627,31 @@ export default function StudioPage({ onOpenTraceModal }) {
 
             {/* Input Controls */}
             {inputMode === "text" && (
-              <div style={{ marginBottom: "16px" }}>
+              <div style={{ marginBottom: "16px", flex: 1, display: "flex", flexDirection: "column" }}>
                 <textarea
-                  rows={8}
+                  rows={7}
                   value={sourceText}
                   onChange={(e) => setSourceText(e.target.value)}
-                  placeholder="Paste raw corporate report, policy document, or strategy markdown..."
+                  placeholder="Paste corporate report, policy document, or strategy markdown..."
                   style={{
                     fontSize: "13px",
                     lineHeight: 1.5,
                     resize: "vertical",
-                    minHeight: "160px",
+                    flex: 1,
+                    minHeight: "150px",
                   }}
                 />
               </div>
             )}
 
             {inputMode === "file" && (
-              <div style={{ marginBottom: "16px" }}>
+              <div style={{ marginBottom: "16px", flex: 1 }}>
                 <label className="upload-dropzone" style={{ display: "block" }}>
-                  <Upload size={24} color="var(--accent-cyan)" style={{ margin: "0 auto 8px" }} />
-                  <div style={{ fontSize: "13px", fontWeight: 600, color: "#f8fafc", marginBottom: "4px" }}>
+                  <Upload size={28} color="#ea580c" style={{ margin: "0 auto 8px" }} />
+                  <div style={{ fontSize: "13px", fontWeight: 700, color: "#0f172a", marginBottom: "4px" }}>
                     {selectedFile ? selectedFile.name : "Drop document or browse"}
                   </div>
-                  <div className="text-meta">PDF, DOCX, TXT, or MD up to 25MB</div>
+                  <div className="text-meta" style={{ color: "#64748b" }}>PDF, DOCX, TXT, or MD up to 25MB</div>
                   <input
                     type="file"
                     accept=".pdf,.txt,.md,.docx"
@@ -531,7 +663,7 @@ export default function StudioPage({ onOpenTraceModal }) {
             )}
 
             {inputMode === "url" && (
-              <div style={{ marginBottom: "16px" }}>
+              <div style={{ marginBottom: "16px", flex: 1 }}>
                 <label className="text-label" style={{ display: "block", marginBottom: "6px" }}>
                   Source Web URL
                 </label>
@@ -543,7 +675,7 @@ export default function StudioPage({ onOpenTraceModal }) {
                     placeholder="https://company.org/report-2026"
                     style={{ paddingLeft: "36px" }}
                   />
-                  <Globe size={15} color="var(--text-dim)" style={{ position: "absolute", left: "12px", top: "14px" }} />
+                  <Globe size={15} color="#ea580c" style={{ position: "absolute", left: "12px", top: "14px" }} />
                 </div>
               </div>
             )}
@@ -552,17 +684,18 @@ export default function StudioPage({ onOpenTraceModal }) {
               <div style={{
                 padding: "14px",
                 borderRadius: "12px",
-                background: "rgba(245, 158, 11, 0.08)",
-                border: "1px solid rgba(245, 158, 11, 0.25)",
+                background: "#fffbeb",
+                border: "1px solid #fde68a",
                 fontSize: "12px",
                 lineHeight: 1.5,
-                color: "#fbbf24",
+                color: "#b45309",
                 marginBottom: "16px",
+                flex: 1,
               }}>
                 <div style={{ display: "flex", gap: "8px", alignItems: "flex-start" }}>
-                  <AlertTriangle size={16} style={{ flexShrink: 0, marginTop: "2px" }} />
+                  <AlertTriangle size={16} color="#d97706" style={{ flexShrink: 0, marginTop: "2px" }} />
                   <div>
-                    <strong>Synthetic Free Prompt Mode:</strong> Generates ungrounded content tagged with <code className="font-mono" style={{ fontSize: "11px" }}>SYNTHETIC_MODEL_GENERATED</code>.
+                    <strong>Synthetic Free Prompt Mode:</strong> Generates ungrounded content tagged with <code className="font-mono" style={{ fontSize: "11px", color: "#92400e" }}>SYNTHETIC_MODEL_GENERATED</code>.
                   </div>
                 </div>
               </div>
@@ -593,11 +726,11 @@ export default function StudioPage({ onOpenTraceModal }) {
           <div className="studio-card">
             <div className="studio-card-header">
               <div className="studio-card-title-group">
-                <div className="studio-card-icon">
-                  <Sliders size={17} color="#a855f7" />
+                <div className="studio-card-icon" style={{ background: "#fffbeb", borderColor: "rgba(245, 158, 11, 0.35)" }}>
+                  <Sliders size={18} color="#d97706" />
                 </div>
                 <div>
-                  <h2>Operator Governance</h2>
+                  <h3 className="text-card-title">Operator Governance</h3>
                   <div className="text-meta">Policy constraints</div>
                 </div>
               </div>
@@ -609,16 +742,20 @@ export default function StudioPage({ onOpenTraceModal }) {
                 <label className="text-label" style={{ display: "block", marginBottom: "6px" }}>
                   Domain Profile
                 </label>
-                <select
-                  value={domainProfile}
-                  onChange={(e) => setDomainProfile(e.target.value)}
-                >
-                  <option value="corporate">Corporate Strategy</option>
-                  <option value="healthcare">Healthcare (Strict Privacy)</option>
-                  <option value="government">Government & Public</option>
-                  <option value="disaster_response">Disaster Emergency</option>
-                  <option value="cybersecurity">Cyber Threat Intel</option>
-                </select>
+                <div style={{ position: "relative" }}>
+                  <select
+                    value={domainProfile}
+                    onChange={(e) => setDomainProfile(e.target.value)}
+                    style={{ paddingLeft: "36px" }}
+                  >
+                    <option value="corporate">Corporate Strategy</option>
+                    <option value="healthcare">Healthcare (Strict Privacy)</option>
+                    <option value="government">Government & Public</option>
+                    <option value="disaster_response">Disaster Emergency</option>
+                    <option value="cybersecurity">Cyber Threat Intel</option>
+                  </select>
+                  <ListFilter size={15} color="#ea580c" style={{ position: "absolute", left: "12px", top: "14px" }} />
+                </div>
               </div>
 
               {/* Disclosure Ceiling Gate: Segmented Control */}
@@ -649,20 +786,15 @@ export default function StudioPage({ onOpenTraceModal }) {
                         style={{
                           fontSize: "11px",
                           padding: "6px 2px",
-                          fontWeight: isActive ? 700 : 500,
-                          color: isActive ? "#ffffff" : "var(--text-dim)",
+                          fontWeight: isActive ? 700 : 600,
+                          color: isActive ? "#ffffff" : "#78350f",
                           background: isActive ? (
-                            level === "PUBLIC" ? "rgba(16, 185, 129, 0.2)" :
-                            level === "INTERNAL" ? "rgba(59, 130, 246, 0.2)" :
-                            level === "CONFIDENTIAL" ? "rgba(245, 158, 11, 0.2)" :
-                            "rgba(168, 85, 247, 0.2)"
+                            level === "PUBLIC" ? "#10b981" :
+                            level === "INTERNAL" ? "#3b82f6" :
+                            level === "CONFIDENTIAL" ? "#f59e0b" :
+                            "#ea580c"
                           ) : "transparent",
-                          border: isActive ? (
-                            level === "PUBLIC" ? "1px solid rgba(16, 185, 129, 0.4)" :
-                            level === "INTERNAL" ? "1px solid rgba(59, 130, 246, 0.4)" :
-                            level === "CONFIDENTIAL" ? "1px solid rgba(245, 158, 11, 0.4)" :
-                            "1px solid rgba(168, 85, 247, 0.4)"
-                          ) : "1px solid transparent",
+                          boxShadow: isActive ? "0 2px 6px rgba(0,0,0,0.15)" : "none",
                         }}
                       >
                         {level.slice(0, 4)}
@@ -672,30 +804,36 @@ export default function StudioPage({ onOpenTraceModal }) {
                 </div>
               </div>
 
-              {/* Persona Parameters (Larger 44px dropdowns) */}
+              {/* Persona Parameters (Larger 44px dropdowns with icons) */}
               <div>
                 <label className="text-label" style={{ display: "block", marginBottom: "6px" }}>
                   Target Audience
                 </label>
-                <select value={audience} onChange={(e) => setAudience(e.target.value)}>
-                  <option value="general_public">General Public</option>
-                  <option value="c_suite">C-Suite Leadership</option>
-                  <option value="regulators">Regulators & Auditors</option>
-                  <option value="technical_experts">Technical Analysts</option>
-                  <option value="media">Press & Media</option>
-                </select>
+                <div style={{ position: "relative" }}>
+                  <select value={audience} onChange={(e) => setAudience(e.target.value)} style={{ paddingLeft: "36px" }}>
+                    <option value="general_public">General Public</option>
+                    <option value="c_suite">C-Suite Leadership</option>
+                    <option value="regulators">Regulators & Auditors</option>
+                    <option value="technical_experts">Technical Analysts</option>
+                    <option value="media">Press & Media</option>
+                  </select>
+                  <Users size={15} color="#ea580c" style={{ position: "absolute", left: "12px", top: "14px" }} />
+                </div>
               </div>
 
               <div>
                 <label className="text-label" style={{ display: "block", marginBottom: "6px" }}>
                   Communication Tone
                 </label>
-                <select value={tone} onChange={(e) => setTone(e.target.value)}>
-                  <option value="professional">Professional</option>
-                  <option value="urgent">Urgent Directive</option>
-                  <option value="objective">Objective & Neutral</option>
-                  <option value="empathetic">Empathetic</option>
-                </select>
+                <div style={{ position: "relative" }}>
+                  <select value={tone} onChange={(e) => setTone(e.target.value)} style={{ paddingLeft: "36px" }}>
+                    <option value="professional">Professional</option>
+                    <option value="urgent">Urgent Directive</option>
+                    <option value="objective">Objective & Neutral</option>
+                    <option value="empathetic">Empathetic</option>
+                  </select>
+                  <Volume2 size={15} color="#ea580c" style={{ position: "absolute", left: "12px", top: "14px" }} />
+                </div>
               </div>
 
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px" }}>
@@ -703,12 +841,15 @@ export default function StudioPage({ onOpenTraceModal }) {
                   <label className="text-label" style={{ display: "block", marginBottom: "6px" }}>
                     Language
                   </label>
-                  <select value={language} onChange={(e) => setLanguage(e.target.value)}>
-                    <option value="en">English (en)</option>
-                    <option value="es">Spanish (es)</option>
-                    <option value="hi">Hindi (hi)</option>
-                    <option value="fr">French (fr)</option>
-                  </select>
+                  <div style={{ position: "relative" }}>
+                    <select value={language} onChange={(e) => setLanguage(e.target.value)} style={{ paddingLeft: "34px", paddingRight: "26px" }}>
+                      <option value="en">English</option>
+                      <option value="es">Spanish</option>
+                      <option value="hi">Hindi</option>
+                      <option value="fr">French</option>
+                    </select>
+                    <Languages size={14} color="#ea580c" style={{ position: "absolute", left: "11px", top: "15px" }} />
+                  </div>
                 </div>
 
                 <div>
@@ -735,19 +876,19 @@ export default function StudioPage({ onOpenTraceModal }) {
           <div className="studio-card" style={{ minHeight: "360px" }}>
             <div className="studio-card-header">
               <div className="studio-card-title-group">
-                <div className="studio-card-icon" style={{ background: "rgba(16, 185, 129, 0.08)", borderColor: "rgba(16, 185, 129, 0.25)" }}>
-                  <CheckSquare size={17} color="#34d399" />
+                <div className="studio-card-icon" style={{ background: "#fffbeb", borderColor: "rgba(245, 158, 11, 0.35)" }}>
+                  <CheckSquare size={18} color="#d97706" />
                 </div>
                 <div>
-                  <h2>Pre-Generation Claim Bank</h2>
+                  <h3 className="text-card-title">Pre-Generation Claim Bank</h3>
                   <div className="text-meta">Atomic grounded factual assertions</div>
                 </div>
               </div>
 
               {claimBank && (
                 <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-                  <span className="text-meta">
-                    Permitted: <strong style={{ color: "#34d399" }}>{selectedClaimIds.length}</strong> / {claimBank.claims?.length || 0}
+                  <span className="text-meta" style={{ color: "#475569" }}>
+                    Permitted: <strong style={{ color: "#ea580c" }}>{selectedClaimIds.length}</strong> / {claimBank.claims?.length || 0}
                   </span>
                   <button
                     onClick={() => {
@@ -761,7 +902,7 @@ export default function StudioPage({ onOpenTraceModal }) {
                       }
                     }}
                     className="btn btn-ghost btn-sm"
-                    style={{ fontSize: "12px", height: "28px", padding: "0 8px" }}
+                    style={{ fontSize: "12px", height: "28px", padding: "0 8px", color: "#b45309" }}
                   >
                     {selectedClaimIds.length === 0 ? "Select All Permitted" : "Clear All"}
                   </button>
@@ -779,27 +920,27 @@ export default function StudioPage({ onOpenTraceModal }) {
                 justifyContent: "center",
                 padding: "48px 24px",
                 textAlign: "center",
-                border: "1.5px dashed var(--border-subtle)",
+                border: "1.5px dashed rgba(245, 158, 11, 0.35)",
                 borderRadius: "var(--radius-md)",
-                background: "rgba(10, 16, 29, 0.3)",
+                background: "#fffdfa",
               }}>
                 <div style={{
-                  width: "48px",
-                  height: "48px",
+                  width: "50px",
+                  height: "50px",
                   borderRadius: "14px",
-                  background: "rgba(255, 255, 255, 0.03)",
-                  border: "1px solid var(--border-subtle)",
+                  background: "#fffbeb",
+                  border: "1px solid rgba(245, 158, 11, 0.3)",
                   display: "flex",
                   alignItems: "center",
                   justifyContent: "center",
                   marginBottom: "16px",
                 }}>
-                  <Database size={22} color="var(--text-dim)" />
+                  <Database size={24} color="#d97706" />
                 </div>
-                <h3 style={{ fontSize: "16px", fontWeight: 600, color: "#f8fafc", marginBottom: "6px" }}>
+                <h4 style={{ fontSize: "16px", fontWeight: 700, color: "#0f172a", marginBottom: "6px" }}>
                   Claim Bank Awaiting Ingestion
-                </h3>
-                <p className="text-body" style={{ maxWidth: "420px", fontSize: "14px" }}>
+                </h4>
+                <p className="text-body" style={{ maxWidth: "420px", fontSize: "14px", color: "#64748b" }}>
                   Ingest a source document or choose a demo template on the left. The Docling layout parser will extract atomic claims, coordinate pointers, and sensitivity levels.
                 </p>
               </div>
@@ -808,7 +949,7 @@ export default function StudioPage({ onOpenTraceModal }) {
                 display: "flex",
                 flexDirection: "column",
                 gap: "10px",
-                maxHeight: "340px",
+                maxHeight: "360px",
                 overflowY: "auto",
                 paddingRight: "6px",
               }}>
@@ -850,14 +991,15 @@ export default function StudioPage({ onOpenTraceModal }) {
                             <span 
                               className="font-mono text-meta" 
                               style={{ 
-                                color: "var(--accent-cyan)", 
-                                background: "rgba(56, 189, 248, 0.08)",
-                                border: "1px solid rgba(56, 189, 248, 0.2)",
+                                color: "#c2410c", 
+                                background: "#fff7ed",
+                                border: "1px solid #fed7aa",
                                 padding: "2px 7px",
                                 borderRadius: "4px",
                                 display: "inline-flex",
                                 alignItems: "center",
                                 gap: "4px",
+                                fontWeight: 700,
                               }}
                               onClick={(e) => {
                                 e.stopPropagation();
@@ -875,11 +1017,11 @@ export default function StudioPage({ onOpenTraceModal }) {
                           </div>
 
                           {!isAllowed ? (
-                            <span style={{ fontSize: "12px", color: "var(--accent-amber)", display: "flex", alignItems: "center", gap: "4px" }}>
+                            <span style={{ fontSize: "12px", color: "#d97706", display: "flex", alignItems: "center", gap: "4px", fontWeight: 600 }}>
                               <Lock size={12} /> Gated by {disclosureLevel} ceiling
                             </span>
                           ) : (
-                            <span className="text-meta" style={{ color: "var(--text-dim)" }}>
+                            <span className="text-meta" style={{ color: "#64748b", fontWeight: 500 }}>
                               Grounded {((claim.confidence || 0.98) * 100).toFixed(0)}%
                             </span>
                           )}
@@ -887,9 +1029,9 @@ export default function StudioPage({ onOpenTraceModal }) {
 
                         <p style={{
                           fontSize: "14px",
-                          lineHeight: 1.5,
-                          color: isAllowed ? "var(--text-main)" : "var(--text-dim)",
-                          filter: !isAllowed ? "blur(2.5px)" : "none",
+                          lineHeight: 1.55,
+                          color: isAllowed ? "#0f172a" : "#94a3b8",
+                          filter: !isAllowed ? "blur(3.5px)" : "none",
                           userSelect: !isAllowed ? "none" : "text",
                           transition: "filter var(--transition-fast)",
                         }}>
@@ -907,16 +1049,16 @@ export default function StudioPage({ onOpenTraceModal }) {
           <div className="studio-card" style={{ minHeight: "420px" }}>
             <div className="studio-card-header">
               <div className="studio-card-title-group">
-                <div className="studio-card-icon" style={{ background: "rgba(56, 189, 248, 0.08)", borderColor: "rgba(56, 189, 248, 0.25)" }}>
-                  <Share2 size={17} color="var(--accent-cyan)" />
+                <div className="studio-card-icon" style={{ background: "#fff7ed", borderColor: "rgba(249, 115, 22, 0.3)" }}>
+                  <Share2 size={18} color="#ea580c" />
                 </div>
                 <div>
-                  <h2>Multi-Channel Rendering Workspace</h2>
+                  <h3 className="text-card-title">Multi-Channel Rendering Workspace</h3>
                   <div className="text-meta">Synthesize parallel governed collateral</div>
                 </div>
               </div>
 
-              {/* Floating Primary CTA */}
+              {/* Floating Primary CTA with soft warm glow */}
               <button
                 onClick={handleGenerateChannels}
                 disabled={isGenerating || (!documentId && inputMode !== "free_prompt")}
@@ -957,33 +1099,33 @@ export default function StudioPage({ onOpenTraceModal }) {
                         width: "28px",
                         height: "28px",
                         borderRadius: "7px",
-                        background: isSelected ? "rgba(56, 189, 248, 0.15)" : "rgba(255, 255, 255, 0.04)",
-                        border: `1px solid ${isSelected ? "rgba(56, 189, 248, 0.3)" : "var(--border-subtle)"}`,
+                        background: isSelected ? "#fff7ed" : "#f8fafc",
+                        border: `1px solid ${isSelected ? "#fed7aa" : "#e2e8f0"}`,
                         display: "flex",
                         alignItems: "center",
                         justifyContent: "center",
                       }}>
-                        <IconComp size={15} color={isSelected ? "var(--accent-cyan)" : "var(--text-muted)"} />
+                        <IconComp size={15} color={isSelected ? "#ea580c" : "#64748b"} />
                       </div>
 
                       <div style={{
-                        width: "16px",
-                        height: "16px",
+                        width: "18px",
+                        height: "18px",
                         borderRadius: "50%",
-                        border: isSelected ? "none" : "1.5px solid rgba(255, 255, 255, 0.2)",
-                        background: isSelected ? "var(--accent-cyan)" : "transparent",
+                        border: isSelected ? "none" : "1.5px solid #cbd5e1",
+                        background: isSelected ? "#ea580c" : "transparent",
                         display: "flex",
                         alignItems: "center",
                         justifyContent: "center",
                       }}>
-                        {isSelected && <Check size={11} color="#050816" strokeWidth={3} />}
+                        {isSelected && <Check size={12} color="#ffffff" strokeWidth={3} />}
                       </div>
                     </div>
 
-                    <div style={{ fontSize: "13px", fontWeight: 600, color: isSelected ? "#f8fafc" : "var(--text-muted)", marginBottom: "3px" }}>
+                    <div style={{ fontSize: "13px", fontWeight: 700, color: isSelected ? "#0f172a" : "#334155", marginBottom: "3px" }}>
                       {channel.title}
                     </div>
-                    <div className="text-meta" style={{ fontSize: "11px", lineHeight: 1.4 }}>
+                    <div className="text-meta" style={{ fontSize: "11px", lineHeight: 1.4, color: "#64748b" }}>
                       {channel.desc}
                     </div>
                   </div>
@@ -991,7 +1133,7 @@ export default function StudioPage({ onOpenTraceModal }) {
               })}
             </div>
 
-            {/* Generated Channels Display */}
+            {/* Generated Channels Display or Empty State */}
             {!channelOutputs ? (
               <div style={{
                 flex: 1,
@@ -1001,28 +1143,28 @@ export default function StudioPage({ onOpenTraceModal }) {
                 justifyContent: "center",
                 padding: "48px 24px",
                 textAlign: "center",
-                border: "1.5px dashed var(--border-subtle)",
+                border: "1.5px dashed rgba(245, 158, 11, 0.35)",
                 borderRadius: "var(--radius-md)",
-                background: "rgba(10, 16, 29, 0.3)",
+                background: "#fffdfa",
               }}>
                 <div style={{
-                  width: "48px",
-                  height: "48px",
+                  width: "50px",
+                  height: "50px",
                   borderRadius: "14px",
-                  background: "rgba(255, 255, 255, 0.03)",
-                  border: "1px solid var(--border-subtle)",
+                  background: "#fff7ed",
+                  border: "1px solid rgba(249, 115, 22, 0.25)",
                   display: "flex",
                   alignItems: "center",
                   justifyContent: "center",
                   marginBottom: "16px",
                 }}>
-                  <Sparkles size={22} color="var(--text-dim)" />
+                  <Sparkles size={24} color="#ea580c" />
                 </div>
-                <h3 style={{ fontSize: "16px", fontWeight: 600, color: "#f8fafc", marginBottom: "6px" }}>
-                  Select Channels & Click Render
-                </h3>
-                <p className="text-body" style={{ maxWidth: "420px", fontSize: "14px" }}>
-                  Configure your operator governance rules and selected channels above, then initiate synthesis to generate factual collateral with reverse traceability coordinates.
+                <h4 style={{ fontSize: "16px", fontWeight: 700, color: "#0f172a", marginBottom: "6px" }}>
+                  Select target channels to generate governed content.
+                </h4>
+                <p className="text-body" style={{ maxWidth: "420px", fontSize: "14px", color: "#64748b" }}>
+                  Configure operator governance policies and select desired distribution channels above, then initiate synthesis to generate factual collateral with reverse traceability.
                 </p>
               </div>
             ) : (
@@ -1048,15 +1190,16 @@ export default function StudioPage({ onOpenTraceModal }) {
                 {/* Active Channel Text Area */}
                 {channelOutputs[activeChannelTab] && (
                   <div style={{
-                    background: "rgba(7, 12, 22, 0.9)",
-                    border: "1px solid var(--border-subtle)",
+                    background: "#ffffff",
+                    border: "1px solid rgba(245, 158, 11, 0.3)",
                     borderRadius: "var(--radius-md)",
                     padding: "20px",
+                    boxShadow: "0 2px 8px rgba(0,0,0,0.03)",
                   }}>
                     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "14px" }}>
-                      <div className="text-meta" style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+                      <div className="text-meta" style={{ display: "flex", alignItems: "center", gap: "12px", color: "#475569" }}>
                         <span>
-                          Claims Cited: <strong style={{ color: "var(--accent-cyan)" }}>{channelOutputs[activeChannelTab]?.claim_count || 0}</strong>
+                          Claims Cited: <strong style={{ color: "#ea580c" }}>{channelOutputs[activeChannelTab]?.claim_count || 0}</strong>
                         </span>
                         <span>•</span>
                         <span>Length: {channelOutputs[activeChannelTab]?.generated_text?.length || 0} chars</span>
@@ -1069,7 +1212,7 @@ export default function StudioPage({ onOpenTraceModal }) {
                       >
                         {copiedChannel === activeChannelTab ? (
                           <>
-                            <Check size={13} color="#34d399" /> Copied
+                            <Check size={13} color="#10b981" /> Copied
                           </>
                         ) : (
                           <>
@@ -1082,7 +1225,7 @@ export default function StudioPage({ onOpenTraceModal }) {
                     <div style={{
                       fontSize: "15px",
                       lineHeight: 1.7,
-                      color: "#f1f5f9",
+                      color: "#1e293b",
                       whiteSpace: "pre-wrap",
                       marginBottom: "16px",
                     }}>
@@ -1092,15 +1235,15 @@ export default function StudioPage({ onOpenTraceModal }) {
                     {/* Citations Footer */}
                     <div style={{
                       paddingTop: "14px",
-                      borderTop: "1px solid var(--border-subtle)",
+                      borderTop: "1px solid rgba(245, 158, 11, 0.2)",
                       display: "flex",
                       alignItems: "center",
                       gap: "8px",
                       fontSize: "12px",
-                      color: "var(--text-dim)",
+                      color: "#64748b",
                     }}>
-                      <MapPin size={13} color="var(--accent-cyan)" />
-                      <span>Click any blue coordinate badge (e.g. <code>[doc_...#p_0]</code>) to view the spatial Docling layout bounding box.</span>
+                      <MapPin size={13} color="#ea580c" />
+                      <span>Click any orange coordinate badge to view the spatial Docling layout bounding box.</span>
                     </div>
                   </div>
                 )}
@@ -1118,11 +1261,11 @@ export default function StudioPage({ onOpenTraceModal }) {
           <div className="studio-card">
             <div className="studio-card-header">
               <div className="studio-card-title-group">
-                <div className="studio-card-icon" style={{ background: "rgba(16, 185, 129, 0.08)", borderColor: "rgba(16, 185, 129, 0.25)" }}>
-                  <ShieldCheck size={17} color="#10b981" />
+                <div className="studio-card-icon" style={{ background: "#ecfdf5", borderColor: "#a7f3d0" }}>
+                  <ShieldCheck size={18} color="#047857" />
                 </div>
                 <div>
-                  <h2>Dual Verification Gates</h2>
+                  <h3 className="text-card-title">Dual Verification Gates</h3>
                   <div className="text-meta">Cryptographic fidelity</div>
                 </div>
               </div>
@@ -1139,7 +1282,7 @@ export default function StudioPage({ onOpenTraceModal }) {
                   </>
                 ) : (
                   <>
-                    <Shield size={13} /> Verify Gates
+                    <Shield size={13} color="#ea580c" /> Verify Gates
                   </>
                 )}
               </button>
@@ -1149,15 +1292,15 @@ export default function StudioPage({ onOpenTraceModal }) {
               <div style={{
                 padding: "36px 16px",
                 textAlign: "center",
-                border: "1.5px dashed var(--border-subtle)",
+                border: "1.5px dashed rgba(245, 158, 11, 0.3)",
                 borderRadius: "var(--radius-md)",
-                background: "rgba(10, 16, 29, 0.3)",
+                background: "#fffdfa",
               }}>
-                <ShieldQuestion size={26} color="var(--text-dim)" style={{ margin: "0 auto 10px" }} />
-                <div style={{ fontSize: "13px", fontWeight: 600, color: "#f8fafc", marginBottom: "4px" }}>
+                <ShieldQuestion size={26} color="#d97706" style={{ margin: "0 auto 10px" }} />
+                <div style={{ fontSize: "13px", fontWeight: 700, color: "#0f172a", marginBottom: "4px" }}>
                   Awaiting Verification
                 </div>
-                <div className="text-meta">
+                <div className="text-meta" style={{ color: "#64748b" }}>
                   Render collateral first, then click "Verify Gates" to evaluate factual entailment and PII.
                 </div>
               </div>
@@ -1167,11 +1310,11 @@ export default function StudioPage({ onOpenTraceModal }) {
                 <div style={{
                   padding: "16px",
                   borderRadius: "var(--radius-md)",
-                  background: "rgba(10, 16, 29, 0.7)",
-                  border: "1px solid var(--border-subtle)",
+                  background: "#fffdf9",
+                  border: "1px solid rgba(245, 158, 11, 0.22)",
                 }}>
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "10px" }}>
-                    <span className="text-label" style={{ color: "#f8fafc" }}>
+                    <span className="text-label" style={{ color: "#0f172a", fontWeight: 700 }}>
                       Gate 1: Factual Fidelity
                     </span>
                     <span className={`badge-pill ${verificationResult.overall_status === "VERIFIED" ? "badge-public" : "badge-restricted"}`}>
@@ -1179,23 +1322,23 @@ export default function StudioPage({ onOpenTraceModal }) {
                     </span>
                   </div>
 
-                  {/* Progress Indicator */}
+                  {/* Progress Indicator with golden-orange fill */}
                   <div style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "8px" }}>
-                    <div style={{ flex: 1, height: "6px", borderRadius: "3px", background: "rgba(255, 255, 255, 0.08)", overflow: "hidden" }}>
+                    <div style={{ flex: 1, height: "7px", borderRadius: "4px", background: "#fef3c7", overflow: "hidden" }}>
                       <div style={{
                         width: `${(verificationResult.pass_rate || 1.0) * 100}%`,
                         height: "100%",
-                        background: "#10b981",
-                        borderRadius: "3px",
+                        background: "linear-gradient(90deg, #f59e0b 0%, #ea580c 100%)",
+                        borderRadius: "4px",
                         transition: "width 0.4s ease",
                       }} />
                     </div>
-                    <span style={{ fontSize: "13px", fontWeight: 700, color: "#34d399", fontFamily: "var(--font-mono)" }}>
+                    <span style={{ fontSize: "13px", fontWeight: 700, color: "#ea580c", fontFamily: "var(--font-mono)" }}>
                       {((verificationResult.pass_rate || 1.0) * 100).toFixed(0)}%
                     </span>
                   </div>
 
-                  <div className="text-meta">
+                  <div className="text-meta" style={{ color: "#64748b" }}>
                     NLI entailment strictly verified against source layout coordinate spans.
                   </div>
                 </div>
@@ -1204,11 +1347,11 @@ export default function StudioPage({ onOpenTraceModal }) {
                 <div style={{
                   padding: "16px",
                   borderRadius: "var(--radius-md)",
-                  background: "rgba(10, 16, 29, 0.7)",
-                  border: "1px solid var(--border-subtle)",
+                  background: "#fffdf9",
+                  border: "1px solid rgba(245, 158, 11, 0.22)",
                 }}>
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "10px" }}>
-                    <span className="text-label" style={{ color: "#f8fafc" }}>
+                    <span className="text-label" style={{ color: "#0f172a", fontWeight: 700 }}>
                       Gate 2: PII & Leak Guard
                     </span>
                     <span className={`badge-pill ${verificationResult.overall_appropriateness === "APPROPRIATE" ? "badge-public" : "badge-confidential"}`}>
@@ -1217,12 +1360,12 @@ export default function StudioPage({ onOpenTraceModal }) {
                   </div>
 
                   <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
-                    <div style={{ display: "flex", alignItems: "center", gap: "7px", fontSize: "12px", color: "var(--text-muted)" }}>
-                      <CheckCircle2 size={13} color="#34d399" />
+                    <div style={{ display: "flex", alignItems: "center", gap: "7px", fontSize: "12px", color: "#334155" }}>
+                      <CheckCircle2 size={13} color="#10b981" />
                       <span>Zero PII / SSN / Secret Leaks Detected</span>
                     </div>
-                    <div style={{ display: "flex", alignItems: "center", gap: "7px", fontSize: "12px", color: "var(--text-muted)" }}>
-                      <CheckCircle2 size={13} color="#34d399" />
+                    <div style={{ display: "flex", alignItems: "center", gap: "7px", fontSize: "12px", color: "#334155" }}>
+                      <CheckCircle2 size={13} color="#10b981" />
                       <span>Adheres to {disclosureLevel} ceiling clearance</span>
                     </div>
                   </div>
@@ -1235,11 +1378,11 @@ export default function StudioPage({ onOpenTraceModal }) {
           <div className="studio-card">
             <div className="studio-card-header">
               <div className="studio-card-title-group">
-                <div className="studio-card-icon" style={{ background: "rgba(245, 158, 11, 0.08)", borderColor: "rgba(245, 158, 11, 0.25)" }}>
-                  <KeyRound size={17} color="#f59e0b" />
+                <div className="studio-card-icon" style={{ background: "#fffbeb", borderColor: "rgba(245, 158, 11, 0.35)" }}>
+                  <KeyRound size={18} color="#d97706" />
                 </div>
                 <div>
-                  <h2>Audit Manifest</h2>
+                  <h3 className="text-card-title">Audit Manifest</h3>
                   <div className="text-meta">Cryptographic security record</div>
                 </div>
               </div>
@@ -1258,7 +1401,7 @@ export default function StudioPage({ onOpenTraceModal }) {
                     placeholder="Compliance Officer Name"
                     style={{ paddingLeft: "36px" }}
                   />
-                  <UserCheck size={16} color="var(--text-dim)" style={{ position: "absolute", left: "12px", top: "14px" }} />
+                  <UserCheck size={16} color="#ea580c" style={{ position: "absolute", left: "12px", top: "14px" }} />
                 </div>
               </div>
 
@@ -1286,11 +1429,12 @@ export default function StudioPage({ onOpenTraceModal }) {
                 <div style={{
                   padding: "16px",
                   borderRadius: "var(--radius-md)",
-                  background: "rgba(7, 12, 22, 0.9)",
-                  border: "1px solid var(--border-medium)",
+                  background: "#fffdfa",
+                  border: "1px solid rgba(245, 158, 11, 0.35)",
+                  boxShadow: "0 2px 8px rgba(217, 119, 6, 0.05)",
                 }}>
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "10px" }}>
-                    <span className="text-label" style={{ fontSize: "11px", textTransform: "uppercase" }}>
+                    <span className="text-label" style={{ fontSize: "11px", textTransform: "uppercase", color: "#78350f" }}>
                       SHA-256 Digest
                     </span>
                     <span className={`badge-pill ${integrityStatus.status === "PUBLISHED" ? "badge-public" : "badge-internal"}`}>
@@ -1301,22 +1445,23 @@ export default function StudioPage({ onOpenTraceModal }) {
                   <div style={{
                     padding: "10px",
                     borderRadius: "8px",
-                    background: "rgba(10, 16, 29, 0.9)",
-                    border: "1px solid var(--border-subtle)",
+                    background: "#fef8ee",
+                    border: "1px solid rgba(245, 158, 11, 0.25)",
                     marginBottom: "12px",
                   }}>
                     <div className="font-mono" style={{
                       fontSize: "11px",
-                      color: "var(--accent-cyan)",
+                      color: "#c2410c",
                       wordBreak: "break-all",
                       lineHeight: 1.5,
+                      fontWeight: 600,
                     }}>
                       {integrityStatus.hash || integrityStatus.integrity_hash || provenanceRecord?.integrity_hash}
                     </div>
                   </div>
 
-                  <div className="text-meta" style={{ display: "flex", justifyContent: "space-between", marginBottom: "14px", fontSize: "11px" }}>
-                    <span>Signer: <strong>{approverId.split(" ")[0]}</strong></span>
+                  <div className="text-meta" style={{ display: "flex", justifyContent: "space-between", marginBottom: "14px", fontSize: "11px", color: "#64748b" }}>
+                    <span>Signer: <strong style={{ color: "#0f172a" }}>{approverId.split(" ")[0]}</strong></span>
                     <span>Timestamp: {new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
                   </div>
 
@@ -1325,7 +1470,7 @@ export default function StudioPage({ onOpenTraceModal }) {
                     className="btn btn-secondary"
                     style={{ width: "100%", height: "36px", fontSize: "12px", gap: "6px" }}
                   >
-                    <ShieldCheck size={14} color="#34d399" /> Verify Manifest Integrity
+                    <ShieldCheck size={14} color="#10b981" /> Verify Manifest Integrity
                   </button>
                 </div>
               )}
