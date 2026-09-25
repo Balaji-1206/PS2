@@ -5,6 +5,10 @@ from generation.models.generation_models import (
     GenerationRequest,
     GenerationResponse,
 )
+from generation.models.operator_models import (
+    ChannelType,
+    OperatorConfig,
+)
 
 __all__ = [
     "ClaimItem",
@@ -12,4 +16,6 @@ __all__ = [
     "GenerationResult",
     "GenerationRequest",
     "GenerationResponse",
+    "ChannelType",
+    "OperatorConfig",
 ]
