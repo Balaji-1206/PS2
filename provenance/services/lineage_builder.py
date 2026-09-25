@@ -92,13 +92,36 @@ class LineageBuilder:
         block_types: Dict[str, int] = {}
         extracted_pointers: List[str] = []
 
-        for block in blocks:
-            b_type = block.get("block_type", "paragraph")
-            block_types[b_type] = block_types.get(b_type, 0) + 1
-            if "pointer" in block:
-                extracted_pointers.append(block["pointer"])
+        if blocks:
+            for block in blocks:
+                b_type = block.get("block_type", "paragraph")
+                block_types[b_type] = block_types.get(b_type, 0) + 1
+                if "pointer" in block:
+                    extracted_pointers.append(block["pointer"])
+            sha256_hash = compute_sha256(blocks)
+        else:
+            content = data.get("content", {})
+            paragraphs = content.get("paragraphs", []) if isinstance(content, dict) else getattr(content, "paragraphs", [])
+            tables = content.get("tables", []) if isinstance(content, dict) else getattr(content, "tables", [])
+            hierarchy = content.get("hierarchy", []) if isinstance(content, dict) else getattr(content, "hierarchy", [])
+            source_mapping = data.get("source_mapping", [])
 
-        sha256_hash = compute_sha256(blocks)
+            if paragraphs:
+                block_types["paragraph"] = len(paragraphs)
+            if tables:
+                block_types["table"] = len(tables)
+            if hierarchy:
+                block_types["heading"] = len(hierarchy)
+
+            total_blocks = len(paragraphs) + len(tables) + len(hierarchy)
+
+            for sm in source_mapping:
+                ptr = sm.get("source_pointer") if isinstance(sm, dict) else getattr(sm, "source_pointer", None)
+                if ptr:
+                    extracted_pointers.append(ptr)
+
+            sha256_hash = compute_sha256({"content": content, "source_mapping": source_mapping})
+
         return ExtractionNode(
             document_id=document_id,
             total_blocks=total_blocks,
@@ -117,11 +140,14 @@ class LineageBuilder:
         data = generation_data.model_dump() if isinstance(generation_data, BaseModel) else generation_data
         generation_id = data.get("generation_id", f"gen_{uuid.uuid4().hex[:8]}")
         document_id = data.get("document_id", "unknown_doc")
-        model_name = data.get("model_name", "qwen3:8b")
+        meta = data.get("metadata", {})
+        model_name = data.get("model_name") or (meta.get("model") if isinstance(meta, dict) else getattr(meta, "model", None)) or "qwen3:8b"
         instruction = data.get("instruction", "")
         generated_text = data.get("generated_text", "")
         claims = data.get("claims", [])
-        created_at = data.get("created_at", datetime.now(timezone.utc).isoformat())
+        created_at = data.get("created_at") or (meta.get("generated_at") if isinstance(meta, dict) else getattr(meta, "generated_at", None)) or datetime.now(timezone.utc).isoformat()
+        if hasattr(created_at, "isoformat"):
+            created_at = created_at.isoformat()
 
         sha256_hash = compute_sha256({
             "generated_text": generated_text,
@@ -136,7 +162,7 @@ class LineageBuilder:
             generated_text_length=len(generated_text),
             total_claims=len(claims),
             sha256_hash=sha256_hash,
-            created_at=created_at,
+            created_at=str(created_at),
             metadata=metadata or {},
         )
 
@@ -148,26 +174,44 @@ class LineageBuilder:
         """Constructs a VerificationNode recording consensus verdicts and confidence scores."""
         data = verification_data.model_dump() if isinstance(verification_data, BaseModel) else verification_data
         verification_id = data.get("verification_id", f"ver_{uuid.uuid4().hex[:8]}")
-        overall_verdict = data.get("overall_verdict", "UNSUPPORTED")
-        overall_confidence = float(data.get("overall_confidence", 0.0))
-        created_at = data.get("created_at", datetime.now(timezone.utc).isoformat())
-        results = data.get("results", [])
+        overall_verdict = data.get("overall_verdict") or data.get("overall_status", "UNSUPPORTED")
+        if hasattr(overall_verdict, "value"):
+            overall_verdict = overall_verdict.value
 
-        claims_verified = sum(1 for r in results if r.get("verdict") == "VERIFIED")
-        claims_contradicted = sum(1 for r in results if r.get("verdict") == "CONTRADICTED")
-        claims_unsupported = sum(1 for r in results if r.get("verdict") == "UNSUPPORTED")
+        overall_confidence = float(data.get("overall_confidence", data.get("pass_rate", 0.0)))
+        created_at = data.get("created_at") or data.get("verified_at") or datetime.now(timezone.utc).isoformat()
+        if hasattr(created_at, "isoformat"):
+            created_at = created_at.isoformat()
+
+        results = data.get("results") or data.get("verified_claims", [])
+
+        claims_verified = 0
+        claims_contradicted = 0
+        claims_unsupported = 0
+
+        for r in results:
+            r_dict = r.model_dump() if isinstance(r, BaseModel) else r
+            verdict = r_dict.get("final_verdict") or r_dict.get("verdict", "UNSUPPORTED")
+            if hasattr(verdict, "value"):
+                verdict = verdict.value
+            if verdict == "VERIFIED":
+                claims_verified += 1
+            elif verdict == "CONTRADICTED":
+                claims_contradicted += 1
+            else:
+                claims_unsupported += 1
 
         sha256_hash = compute_sha256(results)
 
         return VerificationNode(
             verification_id=verification_id,
-            overall_verdict=overall_verdict,
+            overall_verdict=str(overall_verdict),
             claims_verified=claims_verified,
             claims_contradicted=claims_contradicted,
             claims_unsupported=claims_unsupported,
             overall_confidence=overall_confidence,
             sha256_hash=sha256_hash,
-            created_at=created_at,
+            created_at=str(created_at),
             metadata=metadata or {},
         )
 
