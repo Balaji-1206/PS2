@@ -2,7 +2,7 @@
 from typing import Any, Dict, List, Optional
 from pydantic import BaseModel, Field
 
-from provenance.models.provenance_models import ProvenanceRecord
+from provenance.models.provenance_models import ProvenanceRecord, ReverseTraceResult
 
 
 class BuildProvenanceRequest(BaseModel):
@@ -14,6 +14,19 @@ class BuildProvenanceRequest(BaseModel):
     filename: Optional[str] = None
     source_type: Optional[str] = None
     metadata: Optional[Dict[str, Any]] = Field(default_factory=dict)
+
+
+class PublishProvenanceRequest(BaseModel):
+    """Payload for signing and publishing a provenance record."""
+    approver_id: str
+    digital_signature: Optional[str] = None
+    disclosure_level: Optional[str] = "PUBLIC"
+
+
+class ReverseTraceResponse(BaseModel):
+    """API response for reverse traceability query."""
+    status: str = "success"
+    data: ReverseTraceResult
 
 
 class ProvenanceAPIResponse(BaseModel):
@@ -46,3 +59,4 @@ class ErrorResponse(BaseModel):
     """Standard error response model."""
     status: str = "error"
     message: str
+

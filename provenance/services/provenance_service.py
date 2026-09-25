@@ -1,5 +1,5 @@
-"""Provenance service orchestrating lineage tracking, pipeline assembly, and integrity checks."""
 import logging
+from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
 from provenance.models.provenance_models import (
@@ -8,9 +8,11 @@ from provenance.models.provenance_models import (
     GenerationNode,
     VerificationNode,
     ProvenanceRecord,
+    ReverseTraceResult,
 )
 from provenance.services.lineage_builder import (
     LineageBuilder,
+    compute_manifest_integrity_hash,
     verify_record_integrity,
 )
 from provenance.services.storage_service import ProvenanceStorageService
@@ -158,3 +160,106 @@ class ProvenanceService:
             generation_node=generation_node,
             verification_node=verification_node,
         )
+
+    def publish_record(
+        self,
+        provenance_id: str,
+        approver_id: str,
+        digital_signature: Optional[str] = None,
+        disclosure_level: Optional[str] = "PUBLIC",
+    ) -> ProvenanceRecord:
+        """Signs and seals a ProvenanceRecord for publication, cryptographically resealing its integrity hash."""
+        record = self.storage.get_record(provenance_id)
+        if not record:
+            raise ValueError(f"Provenance record '{provenance_id}' not found.")
+
+        record.status = "PUBLISHED"
+        record.approver_id = approver_id
+        if disclosure_level:
+            record.disclosure_level = disclosure_level
+        if digital_signature:
+            record.metadata["digital_signature"] = digital_signature
+        record.published_at = datetime.now(timezone.utc).isoformat()
+
+        # Reseal integrity hash
+        record.integrity_hash = compute_manifest_integrity_hash(record)
+        self.storage.save_record(record)
+        return record
+
+    def trace_source_pointer(
+        self,
+        pointer: str,
+        document_id: Optional[str] = None,
+    ) -> Optional[ReverseTraceResult]:
+        """Resolves a claim or block source pointer back to its raw extraction bounding box and text."""
+        doc_id = document_id
+        block_id = pointer
+        if "#" in pointer:
+            parts = pointer.split("#", 1)
+            doc_id = doc_id or parts[0]
+            block_id = parts[1]
+
+        if not doc_id:
+            return None
+
+        try:
+            from extraction.services.storage_service import StorageService
+            ext_storage = StorageService()
+            doc = ext_storage.get(doc_id)
+        except Exception as e:
+            logger.warning(f"Failed to lookup extraction doc '{doc_id}': {e}")
+            return None
+
+        if not doc:
+            return None
+
+        matching_mapping = None
+        source_mappings = getattr(doc, "source_mapping", None) or []
+        for sm in source_mappings:
+            sm_id = getattr(sm, "id", None) or (sm.get("id") if isinstance(sm, dict) else None)
+            sm_ptr = getattr(sm, "source_pointer", None) or (sm.get("source_pointer") if isinstance(sm, dict) else None)
+            if sm_id == block_id or sm_ptr == pointer or (sm_ptr and sm_ptr.endswith(f"#{block_id}")):
+                matching_mapping = sm
+                break
+
+        source_text = ""
+        content = getattr(doc, "content", None)
+        if content:
+            paragraphs = getattr(content, "paragraphs", None) or []
+            for p in paragraphs:
+                p_id = getattr(p, "id", None) or (p.get("id") if isinstance(p, dict) else None)
+                if p_id == block_id:
+                    source_text = getattr(p, "text", "") or (p.get("text", "") if isinstance(p, dict) else "")
+                    break
+
+            if not source_text:
+                tables = getattr(content, "tables", None) or []
+                for t in tables:
+                    t_id = getattr(t, "id", None) or (t.get("id") if isinstance(t, dict) else None)
+                    if t_id == block_id:
+                        source_text = str(getattr(t, "data", "") or (t.get("data", "") if isinstance(t, dict) else ""))
+                        break
+
+        page = None
+        reading_order = None
+        bounding_box = None
+        confidence = 1.0
+
+        if matching_mapping:
+            page = getattr(matching_mapping, "page", None) if not isinstance(matching_mapping, dict) else matching_mapping.get("page")
+            reading_order = getattr(matching_mapping, "reading_order", None) if not isinstance(matching_mapping, dict) else matching_mapping.get("reading_order")
+            bounding_box = getattr(matching_mapping, "bounding_box", None) if not isinstance(matching_mapping, dict) else matching_mapping.get("bounding_box")
+            raw_conf = getattr(matching_mapping, "confidence", 1.0) if not isinstance(matching_mapping, dict) else matching_mapping.get("confidence", 1.0)
+            if raw_conf is not None:
+                confidence = float(raw_conf)
+
+        return ReverseTraceResult(
+            document_id=doc_id,
+            source_pointer=pointer if "#" in pointer else f"{doc_id}#{pointer}",
+            source_text=source_text,
+            page=page,
+            reading_order=reading_order,
+            bounding_box=bounding_box,
+            confidence=confidence,
+        )
+

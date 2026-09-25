@@ -3,6 +3,8 @@ from fastapi import APIRouter, HTTPException, status
 
 from provenance.api.schemas import (
     BuildProvenanceRequest,
+    PublishProvenanceRequest,
+    ReverseTraceResponse,
     ProvenanceAPIResponse,
     LineageListResponse,
     IntegrityVerifyResponse,
@@ -118,3 +120,62 @@ async def verify_provenance_integrity(provenance_id: str):
         record_status=verification.get("status"),
         error=verification.get("error"),
     )
+
+
+@router.post(
+    "/provenance/{provenance_id}/publish",
+    response_model=ProvenanceAPIResponse,
+    responses={
+        404: {"model": ErrorResponse},
+        500: {"model": ErrorResponse},
+    },
+)
+async def publish_provenance(provenance_id: str, request: PublishProvenanceRequest):
+    """Signs, seals, and transitions a ProvenanceRecord to PUBLISHED status with resealed integrity hash."""
+    try:
+        record = provenance_service.publish_record(
+            provenance_id=provenance_id,
+            approver_id=request.approver_id,
+            digital_signature=request.digital_signature,
+            disclosure_level=request.disclosure_level,
+        )
+        return ProvenanceAPIResponse(
+            status="success",
+            provenance_id=record.provenance_id,
+            integrity_hash=record.integrity_hash,
+            data=record,
+        )
+    except ValueError as err:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=str(err),
+        )
+    except Exception as err:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Publication failed: {str(err)}",
+        )
+
+
+@router.get(
+    "/provenance/trace/{document_id}/{block_id}",
+    response_model=ReverseTraceResponse,
+    responses={
+        404: {"model": ErrorResponse},
+        500: {"model": ErrorResponse},
+    },
+)
+async def reverse_trace_pointer(document_id: str, block_id: str):
+    """Resolves a claim pointer back to its exact bounding box, layout page, and source text."""
+    pointer = f"{document_id}#{block_id}"
+    trace = provenance_service.trace_source_pointer(pointer=pointer, document_id=document_id)
+    if not trace:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Trace pointer '{pointer}' could not be resolved.",
+        )
+    return ReverseTraceResponse(
+        status="success",
+        data=trace,
+    )
+

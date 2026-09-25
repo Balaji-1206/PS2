@@ -66,6 +66,19 @@ class LineageEdge(BaseModel):
     relationship: str
 
 
+class ReverseTraceResult(BaseModel):
+    """Pinpoint traceability reference back to source extraction block and layout."""
+    model_config = ConfigDict(extra="ignore")
+
+    document_id: str
+    source_pointer: str
+    source_text: str
+    page: Optional[int] = None
+    reading_order: Optional[int] = None
+    bounding_box: Optional[List[float]] = None
+    confidence: float = 1.0
+
+
 class ProvenanceRecord(BaseModel):
     """Immutable, tamper-evident manifest encapsulating full pipeline lineage."""
     model_config = ConfigDict(extra="ignore")
@@ -79,4 +92,7 @@ class ProvenanceRecord(BaseModel):
     edges: List[LineageEdge] = Field(default_factory=list)
     integrity_hash: str
     status: str = "ACTIVE"
+    approver_id: Optional[str] = None
+    disclosure_level: Optional[str] = "PUBLIC"
+    published_at: Optional[str] = None
     metadata: Dict[str, Any] = Field(default_factory=dict)

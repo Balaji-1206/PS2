@@ -45,6 +45,9 @@ def compute_manifest_integrity_hash(record: ProvenanceRecord) -> str:
         "verification_node": record.verification_node.model_dump() if record.verification_node else None,
         "edges": [edge.model_dump() for edge in record.edges],
         "status": record.status,
+        "approver_id": getattr(record, "approver_id", None),
+        "disclosure_level": getattr(record, "disclosure_level", "PUBLIC"),
+        "published_at": getattr(record, "published_at", None),
     }
     return compute_sha256(canonical_dict)
 

@@ -8,7 +8,7 @@ from typing import Any, Dict, List, Optional
 
 from extraction.models.claim_models import AtomicSourceClaim, SensitivityLevel
 from extraction.services.claim_service import SourceClaimService
-from generation.api.schemas import (
+from generation.models.operator_models import (
     ChannelOutput,
     MultiChannelGenerationRequest,
     MultiChannelGenerationResponse,
