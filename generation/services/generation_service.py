@@ -269,9 +269,10 @@ class GenerationService:
         else:
             context_blocks = "[FREE_PROMPT_MODE: NO SOURCE DOCUMENT PROVIDED]"
 
-        # 2. Concurrently render all channels using asyncio.gather
-        tasks = [
-            self._render_channel_task(
+        # 2. Render all requested channels sequentially to prevent local LLM timeout contention
+        rendered_outputs: List[ChannelOutput] = []
+        for ch in request.channels:
+            out = await self._render_channel_task(
                 channel=ch,
                 doc_id=doc_id,
                 extraction_data=extraction_data,
@@ -280,10 +281,7 @@ class GenerationService:
                 instruction_override=request.instruction,
                 is_free_prompt=is_free_prompt,
             )
-            for ch in request.channels
-        ]
-
-        rendered_outputs = await asyncio.gather(*tasks)
+            rendered_outputs.append(out)
 
         outputs_dict: Dict[str, ChannelOutput] = {
             out.channel: out for out in rendered_outputs

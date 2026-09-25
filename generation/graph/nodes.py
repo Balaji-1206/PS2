@@ -6,7 +6,12 @@ def prepare_context_node(state: GenerationState) -> Dict[str, Any]:
     """
     Transforms extracted document elements into structured, numbered reference blocks
     tagged with canonical source pointers for LLM grounding.
+    Preserves pre-existing context_blocks if already populated (e.g. from filtered claim banks).
     """
+    existing_context = state.get("context_blocks")
+    if existing_context and existing_context.strip():
+        return {"context_blocks": existing_context}
+
     doc_id = state.get("document_id", "doc")
     extraction = state.get("extraction_data", {})
     content = extraction.get("content", {})
